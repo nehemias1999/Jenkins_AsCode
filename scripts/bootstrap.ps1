@@ -100,7 +100,7 @@ catch {
 
 # --- Local folders and .env -----------------------------------------------
 
-$localFolders = @('.local', 'artifacts/inventory', 'artifacts/reports')
+$localFolders = @('.local', 'artifacts/inventory', 'artifacts/reports', 'artifacts/logs')
 $envPath = Join-Path $repoRoot '.env'
 $envTemplatePath = Join-Path $repoRoot '.env.example'
 $termsPath = Join-Path $repoRoot '.local/sensitive-terms.txt'

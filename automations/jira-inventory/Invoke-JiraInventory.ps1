@@ -82,6 +82,11 @@ $moduleName = 'jira-inventory'
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
 . (Join-Path $repositoryRoot 'foundation/Import-Foundation.ps1')
 
+# Opened before the first line of progress, so the transcript holds the whole run
+# and not just the part after some later setup step succeeded.
+$usedTemplate = $false
+$runLogPath = Start-JenkinsAsCodeRunLog -RepositoryRoot $repositoryRoot -Module $moduleName -Command $Command
+
 function Write-ModuleLog {
     <#
     .SYNOPSIS
@@ -114,6 +119,9 @@ function Write-ModuleLog {
     )
 
     $masked = Protect-SecretInText -Text $Message
+    # The console gets it and so does the transcript, from the one funnel - so a line
+    # added later cannot end up in only one of them.
+    Add-JenkinsAsCodeRunLogLine -Path $runLogPath -Level $Level -Message $Message
     if ($Level -eq 'warning') {
         Write-Warning "[$moduleName] $masked"
         return
@@ -265,7 +273,8 @@ else {
     }
     else {
         $configurationPath = Resolve-JenkinsAsCodePath -Path $moduleContext.template -RootPath $repositoryRoot
-        Write-ModuleLog "No active declaration at $active. Using the versioned template instead: $configurationPath"
+        $usedTemplate = $true
+        Write-ModuleLog "No active declaration at $active. Using the versioned template instead: $configurationPath. The report will describe the example, not an estate." -Level warning
     }
 }
 
@@ -430,10 +439,12 @@ $provenanceArgument = @{
     Scope           = if ($FieldName.Count -gt 0) { 'fieldName=' + ($FieldName -join ',') } else { 'all' }
     RepositoryRoot  = $repositoryRoot
     ToolVersion     = "$($projectContext.version)"
+    UsedTemplate    = $usedTemplate
 }
 
 $detail = [ordered]@{
     provenance        = Get-JenkinsAsCodeProvenance @provenanceArgument
+    runLog            = $runLogPath
     jiraBaseUrl    = $jiraContext.BaseUrl
     apiVersion     = $jiraContext.ApiVersion
     projectKeys    = @($declaration.projectKeys)

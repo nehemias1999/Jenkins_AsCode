@@ -31,7 +31,7 @@ flowchart TD
         QR[Jira.Rest]
     end
 
-    subgraph base [Fundación: sin dependencias]
+    subgraph base [Fundación: base]
         CF[JenkinsAsCode.Configuration]
         HT[JenkinsAsCode.Http]
         PL[JenkinsAsCode.Plan]
@@ -39,7 +39,10 @@ flowchart TD
     end
 
     JI --> JJ
+    JI --> JR
+    JI --> SG
     PD --> JJ
+    PD --> JR
     PD --> SG
     QI --> QR
     JI --> CF
@@ -72,13 +75,16 @@ flowchart TD
 
 | Permitido | Prohibido |
 | --- | --- |
-| Un punto de entrada llama a módulos de dominio y de base. | Un punto de entrada llama a otro punto de entrada. |
+| Un punto de entrada llama a módulos de dominio, de transporte y de base. | Un punto de entrada llama a otro punto de entrada. |
 | Un módulo de dominio llama a su transporte. | Un módulo de dominio llama a otro módulo de dominio. |
 | Un transporte llama a la base. | Un transporte llama a otro transporte. |
 | La base no llama a nada, salvo `Report` a `Plan`. | La base llama hacia arriba. |
 
 `JenkinsAsCode.Configuration`, `.Http` y `.Plan` **no dependen de nada**, así que nada
-puede ciclar a través de ellos. Ese es el orden en que `Import-Foundation.ps1` los carga:
+puede ciclar a través de ellos. `.Report` es la única excepción declarada: depende de
+`.Plan`, y por eso el subgrafo se llama «base» y no «sin dependencias» — el rótulo decía
+lo segundo mientras contenía a `.Report`, y el propio diagrama dibujaba esa arista doce
+líneas más abajo. Ese es el orden en que `Import-Foundation.ps1` los carga:
 cargar fuera de orden hace que `RequiredModules` reporte un error de resolución que nombra
 el módulo equivocado.
 

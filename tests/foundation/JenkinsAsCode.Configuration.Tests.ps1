@@ -118,3 +118,54 @@ Describe 'Get-JenkinsAsCodeRequiredValue' {
         finally { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
     }
 }
+Describe 'The declared schemas do not rely on what the support floor cannot check' {
+
+    # Windows PowerShell 5.1 has no Test-Json -Schema, so on the declared support
+    # floor every declaration is validated by the reduced validator in
+    # JenkinsAsCode.Configuration. That validator ignores a specific set of keywords
+    # rather than guessing at them - deliberately, so it never rejects a valid
+    # document. The consequence is easy to miss: a rule written with one of those
+    # keywords is enforced on PowerShell 7 and silently absent on 5.1.
+    #
+    # Nothing said so before. This is what says so, at the moment somebody adds one.
+    # Only what -ForEach needs is built during discovery, because Pester expands
+    # -ForEach before any BeforeAll runs. Everything else is built at run time: a
+    # $script: variable set during discovery is NOT visible when the test executes,
+    # which is the trap Automations.Tests.ps1 also documents.
+    BeforeDiscovery {
+        . (Join-Path $PSScriptRoot '../TestHelpers.ps1')
+        $script:SchemaFile = @(
+            Get-ChildItem -Path (Join-Path (Get-RepositoryRoot) 'automations') -Filter '*.schema.json' -Recurse -File
+            Get-ChildItem -Path (Join-Path (Get-RepositoryRoot) 'foundation/schemas') -Filter '*.schema.json' -File
+        ) | ForEach-Object { @{ Name = $_.Name; FullName = $_.FullName } }
+    }
+
+    BeforeAll {
+        $script:IgnoredKeyword = @(
+            'pattern', 'minLength', 'maxLength',
+            'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+            'minItems', 'maxItems', 'uniqueItems',
+            'format', 'oneOf', 'anyOf', 'allOf', 'not',
+            'patternProperties', 'dependentRequired'
+        )
+        # Each entry is a keyword that IS used, with the code that enforces it anyway.
+        # A new use has to be added here, and adding it means naming the code path -
+        # which is the point of the gate.
+        $script:EnforcedInCode = @{
+            'pipelines.schema.json|pattern' = 'remoteName is validated in Invoke-PipelineDrift, and again by the option allowlist in Invoke-GitCommand'
+        }
+    }
+    It 'uses no keyword the reduced validator ignores, unless the code enforces it: <Name>' -ForEach $script:SchemaFile {
+        $text = Get-Content -LiteralPath $FullName -Raw
+        foreach ($keyword in $script:IgnoredKeyword) {
+            if ($text -notmatch ('"' + $keyword + '"\s*:')) { continue }
+            $allowKey = "$Name|$keyword"
+            $script:EnforcedInCode.ContainsKey($allowKey) | Should -BeTrue -Because @"
+$Name declares "$keyword", which the reduced 5.1 validator ignores - so the rule holds on
+PowerShell 7 and not on the declared support floor. Either enforce it in code as an
+invariant, the way the other unexpressible rules are, or drop it from the schema. If you
+have enforced it, add "$allowKey" to EnforcedInCode naming where.
+"@
+        }
+    }
+}

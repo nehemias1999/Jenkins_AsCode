@@ -259,6 +259,121 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($fullPath, $Content, $encoding)
 }
 
+function Start-JenkinsAsCodeRunLog {
+    <#
+    .SYNOPSIS
+        Opens the transcript for one run and returns its path.
+
+    .DESCRIPTION
+        Progress used to exist only on the console, so closing the window ended the
+        only account of what a run did. The report holds the conclusions - which jobs
+        were compared, what each verdict was - and nothing about how they were
+        reached. What was lost between the two: which folders were walked and how
+        many items each returned, the message behind every unreadable job, the notice
+        that a walk was truncated at maximumDepth, and the one that matters most,
+        that the run used the versioned TEMPLATE rather than the active declaration -
+        which means the report describes an example rather than an estate.
+
+        .gitignore has promised that artifacts/ holds "logs" since the first commit.
+        This is the first thing to put one there.
+
+        Called once per run, near the start. Returns the path so the log funnel can
+        append to it; failing to open it is not fatal, because a run that reports
+        correctly without a transcript is better than no run at all.
+
+    .PARAMETER RepositoryRoot
+        Root under which artifacts/logs lives.
+
+    .PARAMETER Module
+        Automation name, used in the file name.
+
+    .PARAMETER Command
+        Verb, used in the file name.
+
+    .EXAMPLE
+        $log = Start-JenkinsAsCodeRunLog -RepositoryRoot $root -Module 'job-inventory' -Command 'plan'
+
+    .OUTPUTS
+        The transcript path, or an empty string when one could not be opened.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)] [string] $RepositoryRoot,
+        [Parameter(Mandatory)] [string] $Module,
+        [Parameter(Mandatory)] [string] $Command
+    )
+
+    try {
+        $directory = Join-Path $RepositoryRoot 'artifacts/logs'
+        if (-not (Test-Path -LiteralPath $directory)) {
+            New-Item -ItemType Directory -Force -Path $directory | Out-Null
+        }
+        # UTC and unique, for the same reasons the report file name is.
+        $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
+        $unique = [guid]::NewGuid().ToString('N').Substring(0, 6)
+        $path = Join-Path $directory ("{0}-{1}-{2}Z-{3}.log" -f $Module, $Command, $stamp, $unique)
+        Add-JenkinsAsCodeRunLogLine -Path $path -Level 'info' -Message "run started: $Module $Command"
+        return $path
+    }
+    catch {
+        Write-Warning "Could not open a run transcript, so this run will not leave one: $($_.Exception.Message)"
+        return ''
+    }
+}
+
+function Add-JenkinsAsCodeRunLogLine {
+    <#
+    .SYNOPSIS
+        Appends one line to a run transcript.
+
+    .DESCRIPTION
+        Every line carries a UTC timestamp and a level, so the transcript can be read
+        long after the console it was echoed to is gone, and so the failures can be
+        picked out of a long run without reading all of it.
+
+        Masks the line the same way the console funnel does. A transcript is written
+        to disk and lives longer than a scrollback buffer, so it is the last place a
+        credential should be allowed to settle.
+
+        Never throws. A transcript that cannot be written must not take the run down
+        with it - the report is the artefact that matters.
+
+    .PARAMETER Path
+        Transcript path. An empty path is ignored, which is how a run with no
+        transcript keeps working.
+
+    .PARAMETER Message
+        Line to write.
+
+    .PARAMETER Level
+        info or warning, matching the console funnel.
+
+    .EXAMPLE
+        Add-JenkinsAsCodeRunLogLine -Path $log -Level 'warning' -Message 'could not read job/x'
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $Path,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $Message,
+        [ValidateSet('info', 'warning')] [string] $Level = 'info'
+    )
+
+    if ([string]::IsNullOrEmpty($Path)) { return }
+    try {
+        $stamp = [datetime]::UtcNow.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+        $line = '{0} {1,-7} {2}' -f $stamp, $Level, (Protect-SecretInText -Text $Message)
+        [System.IO.File]::AppendAllText($Path, $line + [Environment]::NewLine)
+    }
+    catch {
+        # Verbose, not a warning. A run whose disk filled up would otherwise emit one
+        # warning per line and bury its own output in noise about the transcript -
+        # but swallowing the reason entirely leaves nothing to diagnose it with.
+        Write-Verbose "Could not append to the run transcript '$Path': $($_.Exception.Message)"
+    }
+}
 function Get-JenkinsAsCodeProvenance {
     <#
     .SYNOPSIS
@@ -316,6 +431,12 @@ function Get-JenkinsAsCodeProvenance {
     .PARAMETER RepositoryRoot
         Root used to resolve the repository commit.
 
+    .PARAMETER UsedTemplate
+        True when the run read the versioned TEMPLATE rather than the active
+        declaration. It belongs in the report because it changes what the report is
+        ABOUT: a plan built from the template describes an example, not an estate,
+        and the only trace of that used to be one line on a console nobody keeps.
+
     .PARAMETER ToolVersion
         Version this product states for itself, from the project context. Recorded
         because a report is read long after the run, and "the branch specifier was
@@ -335,7 +456,8 @@ function Get-JenkinsAsCodeProvenance {
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $SchemaEngine,
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $Scope,
         [Parameter(Mandatory)] [string] $RepositoryRoot,
-        [Parameter(Mandatory)] [AllowEmptyString()] [string] $ToolVersion
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $ToolVersion,
+        [switch] $UsedTemplate
     )
 
     $declarationFingerprint = ''
@@ -374,6 +496,7 @@ function Get-JenkinsAsCodeProvenance {
         repositoryCommit       = $commit
         declarationPath        = $DeclarationPath
         declarationFingerprint = $declarationFingerprint
+        declarationIsTemplate  = [bool] $UsedTemplate
         schemaEngine           = $SchemaEngine
         scope                  = if ($Scope) { $Scope } else { 'all' }
     }
@@ -582,6 +705,8 @@ function Format-JenkinsAsCodeReportMarkdown {
 Export-ModuleMember -Function @(
     'Protect-SecretInText',
     'Remove-SensitiveValue',
+    'Start-JenkinsAsCodeRunLog',
+    'Add-JenkinsAsCodeRunLogLine',
     'Get-JenkinsAsCodeProvenance',
     'Write-JenkinsAsCodeReport',
     'Format-JenkinsAsCodeReportMarkdown'
