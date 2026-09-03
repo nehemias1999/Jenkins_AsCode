@@ -84,6 +84,36 @@ revisión; lo que falló es que casi nada mecánico lo defendía.
   propósito: los términos son ellos mismos sensibles, así que sembrarlos desde un archivo
   versionado los commitearía en el repositorio que los busca.
 
+- **Integración continua, que no existía.** Cuatro documentos y la ayuda del propio runner
+  afirmaban que "la integración continua corre el mismo comando, así que no hay una segunda
+  definición de pasa". No era cierto: no había CI, así que toda regla que este repositorio
+  llama no negociable valía sólo si alguien se acordaba de correr el script.
+  `.github/workflows/ci.yml` corre `scripts/Invoke-Tests.ps1` —el mismo comando, no una
+  reimplementación, que es precisamente lo que se estaba evitando— en push y en pull
+  request, sobre los **dos** motores del piso de soporte declarado. Las cinco afirmaciones
+  pasan a ser verdaderas en lugar de tener que atenuarlas.
+
+  La capa de términos literales no puede simplemente estar ahí, porque `.local/` está
+  excluido del control de versiones: el workflow la siembra desde un secret cuando existe,
+  y si no existe corre la capa estructural y lo dice.
+
+- **`.editorconfig`**, que `PSScriptAnalyzerSettings.psd1` invocaba como el control que
+  gobierna el layout mientras el archivo no existía — la exclusión delegaba en nada. No es
+  sólo estilo: dos suites extraen funciones con una expresión regular anclada a la llave de
+  cierre en columna 0, así que una reindentación las rompía con "Could not extract" en lugar
+  de con un fallo de aserción.
+
+### Cambiado
+
+- **El gate falla donde antes se salteaba en silencio.** Los warnings de PSScriptAnalyzer se
+  contaban, se imprimían y no fallaban nada, pese a que el archivo de settings declara
+  `Severity = @('Error','Warning')` — lo que volvía decorativa toda su lista documentada de
+  exclusiones, y dejaba `PSUseCompatibleSyntax` (que emite Warning) sin hacer cumplir el piso
+  5.1/7.0. Y si faltaba el analizador, o si no se encontraba ningún `*.Tests.ps1`, el gate
+  salía **verde sin analizar ni testear**: un `-Path` mal tipeado producía una corrida vacía
+  indistinguible de una que pasó. Las tres cosas fallan ahora, y `-Skip` sigue siendo el
+  modo de decir que se quiere dejar algo afuera a propósito.
+
 ## [0.1.0] - 2026-09-01
 
 Primera entrega. Sólo lectura: inventario de jobs, detección de deriva de pipelines y

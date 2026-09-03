@@ -111,9 +111,21 @@ if ($Skip -notcontains 'Analyzer') {
         if ($errors.Count -gt 0) {
             $failures.Add("PSScriptAnalyzer reported $($errors.Count) error(s).")
         }
+        # Warnings fail as well. PSScriptAnalyzerSettings.psd1 declares
+        # Severity = @('Error','Warning'), so they were already in scope by
+        # declaration and this runner simply did not act on it - which made the whole
+        # carefully documented exclusion list in that file decorative. It matters
+        # specifically too: PSUseCompatibleSyntax emits Warning, so the declared
+        # 5.1/7.0 support floor was not being enforced by anything.
+        if ($warnings.Count -gt 0) {
+            $failures.Add("PSScriptAnalyzer reported $($warnings.Count) warning(s). The settings file declares Warning in scope: fix them, or add an exclusion there with its reason.")
+        }
     }
     else {
-        Write-TestLog 'PSScriptAnalyzer is not installed; static analysis skipped. Install-Module PSScriptAnalyzer -Scope CurrentUser'
+        # A missing analyser is a failure, not a skip. Passing without analysing
+        # produces the same output as analysing cleanly, and -Skip Analyzer already
+        # exists for anyone who means to leave it out.
+        $failures.Add('PSScriptAnalyzer is not installed, so static analysis did not run. Install-Module PSScriptAnalyzer -Scope CurrentUser, or pass -Skip Analyzer to leave it out deliberately.')
     }
 }
 
@@ -139,7 +151,10 @@ if ($Skip -notcontains 'Pester') {
             $testFiles = @(Get-ChildItem -LiteralPath $testPath -Recurse -File -Filter '*.Tests.ps1' -ErrorAction SilentlyContinue)
         }
         if ($testFiles.Count -eq 0) {
-            Write-TestLog "Pester: no *.Tests.ps1 under $testPath. Nothing to run."
+            # Reported and passed over until now, which meant a mistyped -Path
+            # produced an empty green run: the same output as a suite that ran and
+            # succeeded. -Skip Pester is how to say you meant to leave it out.
+            $failures.Add("Pester found no *.Tests.ps1 under $testPath, so no test ran. Check the path, or pass -Skip Pester to leave the suite out deliberately.")
             $skipPester = $true
         }
         else {
