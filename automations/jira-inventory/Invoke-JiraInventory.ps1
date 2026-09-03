@@ -384,7 +384,15 @@ $reportPathResolved = if ($ReportPath) {
     Resolve-JenkinsAsCodePath -Path $ReportPath -RootPath $repositoryRoot
 }
 else {
-    Join-Path $repositoryRoot ("artifacts/reports/{0}-{1}-{2}.json" -f $moduleName, $Command, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    # UTC, and unique rather than merely precise. Local time in the name while the
+    # content is UTC meant the lexicographic order of a directory was not the
+    # chronological one, and in the autumn clock change two runs an hour apart landed
+    # on the same name. One second of granularity collided on its own anyway: two runs
+    # of the same command in the same second overwrote each other, and the writer
+    # truncates without a word. The suffix is what makes the name unique.
+    $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
+    $unique = [guid]::NewGuid().ToString('N').Substring(0, 6)
+    Join-Path $repositoryRoot ("artifacts/reports/{0}-{1}-{2}Z-{3}.json" -f $moduleName, $Command, $stamp, $unique)
 }
 
 $detail = [ordered]@{

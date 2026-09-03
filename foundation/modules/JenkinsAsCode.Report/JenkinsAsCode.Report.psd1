@@ -5,7 +5,7 @@
     Author            = 'nehemias1999'
     CompanyName       = 'Unspecified'
     Copyright         = '(c) 2026 nehemias1999. Released under the MIT License.'
-    Description       = 'Evidence writing: plan reports as JSON and Markdown, incremental apply receipts that survive an interrupted run, and redaction applied at the writer.'
+    Description       = 'Evidence writing: plan reports as JSON and Markdown, with redaction by property name and masking by value applied at the writer rather than at each call site.'
     PowerShellVersion = '5.1'
 
     RequiredModules   = @('JenkinsAsCode.Plan')
@@ -14,9 +14,7 @@
         'Protect-SecretInText',
         'Remove-SensitiveValue',
         'Write-JenkinsAsCodeReport',
-        'Format-JenkinsAsCodeReportMarkdown',
-        'Save-JenkinsAsCodeReceipt',
-        'Get-JenkinsAsCodeReceiptPath'
+        'Format-JenkinsAsCodeReportMarkdown'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

@@ -5,12 +5,12 @@
     single resource: what would be done to it (action), whether that is safe to do
     now (status), and why (reason). Nothing else. Keeping the model this small is
     what lets one reviewer read a plan for three different resource families
-    without learning three vocabularies, and what lets `apply` enforce one rule
-    across all of them.
+    without learning three vocabularies.
 
-    That rule: apply refuses to run while any operation is blocked. Partial
-    application of a plan that the reviewer approved as a whole is how an estate
-    ends up in a state nobody declared.
+    The vocabulary is deliberately the same one a repository that DOES write would
+    use, so that somebody reading a plan from either does not have to learn two
+    languages. What differs is who executes: here, a person. Nothing in this module
+    writes, and there is no apply for it to gate - see ADR 0001.
 #>
 
 Set-StrictMode -Version Latest
@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 #   pending   - a change is required and is safe to make.
 #   warning   - the change will proceed but a human should read the reason.
 #   protected - deliberately not changed, to avoid destroying something.
-#   blocked   - cannot proceed. Blocks the whole apply.
+#   blocked   - nothing further about this resource could be determined.
 $script:PlanStatus = @('ok', 'pending', 'warning', 'protected', 'blocked')
 
 # Action describes what would happen to the resource.
@@ -81,7 +81,7 @@ function New-Plan {
         Creates an empty plan for a target.
 
     .PARAMETER Command
-        Command that produced the plan, for example 'plan' or 'apply'.
+        Command that produced the plan, for example 'inventory' or 'plan'.
 
     .PARAMETER Target
         What the plan is about: an application key, an environment, or both.
@@ -131,8 +131,8 @@ function New-PlanOperation {
     .DESCRIPTION
         Action and status are validated against the closed vocabularies above. A
         free-text status is how a plan turns into prose that nothing can enforce -
-        in particular, an `apply` cannot refuse to run on a status it does not
-        recognise.
+        in particular, a caller cannot act on a status it does not recognise, and
+        the exit code of a run is exactly such a caller.
 
     .PARAMETER Resource
         Resource family, for example 'Team', 'Board column', 'Variable Group'.
@@ -281,9 +281,13 @@ function Test-PlanBlocked {
         Returns true when any operation in the plan is blocked.
 
     .DESCRIPTION
-        The gate every `apply` calls before its first write. It is a single function
-        rather than an inline check so that "apply never runs on a blocked plan" is
-        one testable statement instead of a convention each module re-implements.
+        Says whether anything in the plan could not be determined. A single function
+        rather than an inline check so that the question is one testable statement
+        instead of a convention each module re-implements.
+
+        Its answer is what the entry points turn into an exit code: a run whose plan
+        holds a blocked operation exits 2, not 0. Before that it was called and its
+        answer thrown away in a log line, so a scheduler saw success.
 
     .PARAMETER Plan
         Plan from New-Plan.
@@ -298,33 +302,6 @@ function Test-PlanBlocked {
     )
 
     return @($Plan.operations | Where-Object { $_.status -eq 'blocked' }).Count -gt 0
-}
-
-function Assert-PlanApplicable {
-    <#
-    .SYNOPSIS
-        Throws unless the plan is safe to apply.
-
-    .DESCRIPTION
-        Fails with the blocked operations listed, because "the plan is blocked" on
-        its own sends the operator back to re-read the whole plan.
-
-    .PARAMETER Plan
-        Plan from New-Plan.
-
-    .EXAMPLE
-        Assert-PlanApplicable -Plan $plan
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [object] $Plan
-    )
-
-    $blocked = @($Plan.operations | Where-Object { $_.status -eq 'blocked' })
-    if ($blocked.Count -eq 0) { return }
-
-    $detail = ($blocked | ForEach-Object { "  - $($_.resource) '$($_.name)': $($_.reason)" }) -join [Environment]::NewLine
-    throw "Apply refused: the plan has $($blocked.Count) blocked operation(s).$([Environment]::NewLine)$detail"
 }
 
 function Write-PlanSummary {
@@ -384,6 +361,5 @@ Export-ModuleMember -Function @(
     'Add-PlanOperation',
     'Get-PlanSummary',
     'Test-PlanBlocked',
-    'Assert-PlanApplicable',
     'Write-PlanSummary'
 )

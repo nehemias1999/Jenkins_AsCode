@@ -5,7 +5,7 @@
     Author            = 'nehemias1999'
     CompanyName       = 'Unspecified'
     Copyright         = '(c) 2026 nehemias1999. Released under the MIT License.'
-    Description       = 'The shared plan model: one flat list of operations with a closed action and status vocabulary, plus the gate that stops an apply while any operation is blocked.'
+    Description       = 'The shared plan model: one flat list of operations with a closed action and status vocabulary, and the test that says whether anything in a plan could not be determined.'
     PowerShellVersion = '5.1'
 
     FunctionsToExport = @(
@@ -16,7 +16,6 @@
         'Add-PlanOperation',
         'Get-PlanSummary',
         'Test-PlanBlocked',
-        'Assert-PlanApplicable',
         'Write-PlanSummary'
     )
     CmdletsToExport   = @()

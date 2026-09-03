@@ -1,21 +1,23 @@
 <#
     JenkinsAsCode.Report - evidence writing.
 
-    Three artefacts, each answering a different question.
+    Two artefacts, each answering a different question.
 
     * A plan report answers "what was about to happen", and is the thing a
       reviewer approves. It is written before any change.
-    * A receipt answers "what actually happened", and is written incrementally -
-      after every completed operation, not once at the end. That distinction is
-      the whole point: an apply that dies halfway through still leaves a record of
-      exactly which operations completed, which is the only way to resume without
-      guessing.
     * A Markdown summary answers "can a person read this without a JSON viewer",
       and is what gets attached to a change ticket.
 
-    Everything written here passes through Remove-SensitiveValue first. A report
-    is the artefact most likely to be pasted into a chat window, so redaction
-    belongs at the writer, not at each call site.
+    Everything written here passes through Remove-SensitiveValue first, and that
+    walk masks every string it copies with Protect-SecretInText. Two layers,
+    because they see different things: one matches the NAME of a property, which
+    catches a weak password whose value looks like nothing, and the other matches
+    the VALUE, which catches a token embedded in a URL under a name like scmUrl
+    that no pattern would ever flag.
+
+    Both live at the writer rather than at each call site. A report is the artefact
+    most likely to be pasted into a ticket or a chat window, and a call site added
+    next year would otherwise reintroduce the leak without anybody noticing.
 #>
 
 Set-StrictMode -Version Latest
@@ -458,95 +460,9 @@ function Format-JenkinsAsCodeReportMarkdown {
     return ($lines -join [Environment]::NewLine)
 }
 
-function Save-JenkinsAsCodeReceipt {
-    <#
-    .SYNOPSIS
-        Writes or updates the receipt of an apply.
-
-    .DESCRIPTION
-        Called after every completed operation, not once at the end. The file is
-        rewritten each time, which is cheap and means the record on disk is never
-        behind what has actually been done.
-
-        `status` moves from in_progress to completed or failed. A receipt left at
-        in_progress is itself the signal that the run was interrupted, and its
-        completedOperations list is what the operator resumes from.
-
-    .PARAMETER Path
-        Receipt path. Conventionally the report path with a .receipt.json extension.
-
-    .PARAMETER Target
-        What was being applied.
-
-    .PARAMETER Status
-        'in_progress', 'completed' or 'failed'.
-
-    .PARAMETER CompletedOperations
-        Operations finished so far.
-
-    .PARAMETER Message
-        Optional note, typically the failure reason.
-
-    .EXAMPLE
-        Save-JenkinsAsCodeReceipt -Path $receiptPath -Target 'APP_ALPHA' -Status in_progress -CompletedOperations $done
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [string] $Path,
-        [Parameter(Mandatory)] [string] $Target,
-        [Parameter(Mandatory)] [ValidateSet('in_progress', 'completed', 'failed')] [string] $Status,
-        [AllowEmptyCollection()] [object[]] $CompletedOperations = @(),
-        [string] $Message = ''
-    )
-
-    $directory = Split-Path -Parent $Path
-    if ($directory -and -not (Test-Path -LiteralPath $directory)) {
-        New-Item -ItemType Directory -Force -Path $directory | Out-Null
-    }
-
-    $receipt = [pscustomobject]@{
-        generatedAt         = (Get-Date).ToUniversalTime().ToString('o')
-        target              = $Target
-        status              = $Status
-        message             = $Message
-        completedOperations = @($CompletedOperations)
-    }
-
-    $sanitized = Remove-SensitiveValue -InputObject $receipt
-    Write-Utf8NoBom -Path $Path -Content ($sanitized | ConvertTo-Json -Depth 12)
-}
-
-function Get-JenkinsAsCodeReceiptPath {
-    <#
-    .SYNOPSIS
-        Derives the receipt path that belongs to a report path.
-
-    .DESCRIPTION
-        One convention in one place, so a report and its receipt always sit side by
-        side and can be found without being told where to look.
-
-    .PARAMETER ReportPath
-        Path of the JSON report.
-
-    .EXAMPLE
-        Get-JenkinsAsCodeReceiptPath -ReportPath 'artifacts/plans/apply-APP_ALPHA.json'
-
-        Returns 'artifacts/plans/apply-APP_ALPHA.receipt.json'.
-    #>
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory)] [string] $ReportPath
-    )
-
-    return [System.IO.Path]::ChangeExtension($ReportPath, 'receipt.json')
-}
-
 Export-ModuleMember -Function @(
     'Protect-SecretInText',
     'Remove-SensitiveValue',
     'Write-JenkinsAsCodeReport',
-    'Format-JenkinsAsCodeReportMarkdown',
-    'Save-JenkinsAsCodeReceipt',
-    'Get-JenkinsAsCodeReceiptPath'
+    'Format-JenkinsAsCodeReportMarkdown'
 )
