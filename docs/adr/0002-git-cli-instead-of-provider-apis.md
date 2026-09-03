@@ -45,8 +45,8 @@ github.com, contra GitHub Enterprise Server o contra cualquier otro remoto. No h
 caso especial por proveedor porque no hay proveedor en el código: hay un remoto.
 
 Se verificó antes de decidir, no después: `git ls-remote` contra el remoto de este
-repositorio devolvió exit 0 sin que la herramienta aportara ninguna credencial, con
-`GIT_TERMINAL_PROMPT=0` puesto.
+repositorio devolvió el commit exacto que tenía la copia local, sin que la herramienta
+aportara ninguna credencial y con `GIT_TERMINAL_PROMPT=0` puesto.
 
 ## El límite que esto impone, y que se respeta
 
