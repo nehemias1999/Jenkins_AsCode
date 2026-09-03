@@ -65,6 +65,10 @@ Describe 'ConvertFrom-JenkinsJobConfigXml' {
         $secret.Count | Should -Be 1
         $secret[0].isSecret | Should -BeTrue
         $secret[0].defaultValue | Should -Not -Match 'AQAAAB'
+        # Replaced, not merely absent. An empty default would also satisfy the line
+        # above while leaving a reader unable to tell "there was no default" from
+        # "there was one and we refused to read it".
+        $secret[0].defaultValue | Should -Match 'not read'
     }
 
     It 'takes the first choice as the default of a choice parameter' {

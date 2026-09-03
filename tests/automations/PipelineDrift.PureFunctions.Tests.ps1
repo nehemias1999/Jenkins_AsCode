@@ -93,3 +93,30 @@ Describe 'Get-JenkinsfileDriftStatus' {
         { Get-JenkinsfileDriftStatus -Verdict 'probably-fine' -Detail '' } | Should -Throw
     }
 }
+
+Describe 'The extracted functions run under the same rules as production' {
+
+    It 'has StrictMode in force, so a test cannot pass on something production would reject' {
+        # Recorded as a finding, and it was wrong: StrictMode IS in force here.
+        # TestHelpers sets it, BeforeAll dot-sources TestHelpers, and both the It
+        # bodies and a function built with [scriptblock]::Create inherit it from the
+        # invoking scope - verified before writing this.
+        #
+        # The test stays anyway, because the claim was plausible enough to reach a
+        # report: production runs these functions with Set-StrictMode -Version
+        # Latest, this repository carries three long comments about specific
+        # StrictMode traps, and nothing here said whether the semantics matched. Now
+        # something does.
+        $probe = [pscustomobject]@{ present = 1 }
+        { $null = $probe.Absent.Length } | Should -Throw
+    }
+
+    It 'reaches inside a function extracted by regex and dot-sourced' {
+        # The exact shape this file uses to load the pure functions out of the entry
+        # point. Verified inside Pester, not only in a bare shell: if a future Pester
+        # or PowerShell stopped propagating StrictMode into it, these tests would
+        # quietly start accepting what production rejects.
+        . ([scriptblock]::Create('function Test-StrictProbe { param($o) return $o.Absent }'))
+        { $null = Test-StrictProbe -o ([pscustomobject]@{ present = 1 }) } | Should -Throw
+    }
+}

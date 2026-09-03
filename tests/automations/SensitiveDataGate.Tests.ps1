@@ -26,14 +26,17 @@ Describe 'Get-GitIgnoredPath' {
         #
         # This one is matched by the *.tmp rule at the repository root, so it exercises
         # the exact-filename path rather than the directory one.
+        # The name carries a guid because two runs of this suite at once would
+        # otherwise fight over one file, and the loser would report on the other's
+        # state - the same class of problem the comment above describes.
         $root = Get-RepositoryRoot
-        $probe = Join-Path $root 'gitignored-probe.tmp'
+        $probe = Join-Path $root ("gitignored-probe-" + [guid]::NewGuid().ToString('N') + '.tmp')
         Set-Content -LiteralPath $probe -Value 'probe' -Encoding ascii
         try {
             @(Get-GitIgnoredPath -Root $root -Path @($probe)).Count | Should -Be 1
         }
         finally {
-            Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+            Remove-Assertedly -Path $probe
         }
     }
 
@@ -49,15 +52,15 @@ Describe 'Get-GitIgnoredPath' {
         $root = Get-RepositoryRoot
         $directory = Join-Path $root 'artifacts'
         $createdHere = -not (Test-Path -LiteralPath $directory)
-        $nested = Join-Path $directory 'reports/gitignored-probe.json'
+        $nested = Join-Path $directory ("reports/gitignored-probe-" + [guid]::NewGuid().ToString('N') + '.json')
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $nested) | Out-Null
         Set-Content -LiteralPath $nested -Value '{}' -Encoding ascii
         try {
             @(Get-GitIgnoredPath -Root $root -Path @($nested)).Count | Should -Be 1
         }
         finally {
-            Remove-Item -LiteralPath $nested -Force -ErrorAction SilentlyContinue
-            if ($createdHere) { Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue }
+            Remove-Assertedly -Path $nested
+            if ($createdHere) { Remove-Assertedly -Path $directory -Recurse }
         }
     }
 
@@ -75,14 +78,14 @@ Describe 'The gate covers the whole repository' {
 
     It 'passes on the working tree as it stands' {
         # Run as its own process so a failure is an exit code, not an exception here.
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath 2>&1
+        $output = & (Get-PowerShellHostPath) -NoProfile -ExecutionPolicy Bypass -File $script:GatePath 2>&1
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
     }
 
     It 'still reads the files that are not ignored' {
         # A filter bug that excluded everything would make the gate pass vacuously,
         # which looks identical to passing properly.
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath 2>&1
+        $output = & (Get-PowerShellHostPath) -NoProfile -ExecutionPolicy Bypass -File $script:GatePath 2>&1
         ($output -join ' ') | Should -Match 'across \d+ file'
     }
 
@@ -93,7 +96,7 @@ Describe 'The gate covers the whole repository' {
         # internal identifier with no recognisable shape, which is precisely the kind
         # that leaks. The success line has to say which layers answered.
         $missing = Join-Path ([System.IO.Path]::GetTempPath()) ("no-terms-" + [guid]::NewGuid().ToString() + '.txt')
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $missing 2>&1
+        $output = & (Get-PowerShellHostPath) -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $missing 2>&1
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         ($output -join ' ') | Should -Match 'structural rules only, no deny terms loaded'
     }
@@ -103,7 +106,7 @@ Describe 'The gate covers the whole repository' {
         # Without a distinct exit code, a run with the layer silently absent is
         # indistinguishable from a run with it in force.
         $missing = Join-Path ([System.IO.Path]::GetTempPath()) ("no-terms-" + [guid]::NewGuid().ToString() + '.txt')
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $missing -RequireTermsFile 2>&1
+        $output = & (Get-PowerShellHostPath) -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $missing -RequireTermsFile 2>&1
         $LASTEXITCODE | Should -Be 2 -Because ($output -join [Environment]::NewLine)
     }
 
@@ -114,7 +117,7 @@ Describe 'The gate covers the whole repository' {
             # would sit in this very file and the gate would dutifully find it there.
             $term = 'absent-' + [guid]::NewGuid().ToString('N')
             Set-Content -LiteralPath $terms -Value @('# a comment is not a term', $term) -Encoding ASCII
-            $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $terms -RequireTermsFile 2>&1
+            $output = & (Get-PowerShellHostPath) -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $terms -RequireTermsFile 2>&1
             $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
             ($output -join ' ') | Should -Match 'structural rules \+ 1 deny term'
         }

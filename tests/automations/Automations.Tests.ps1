@@ -109,11 +109,45 @@ Describe 'No code path can write to Jenkins or Jira' {
     }
 
     It 'sends no HTTP method other than GET' {
+        # Read from the parse tree. The text version matched two spellings of a
+        # method and nothing else, so -Method $verb - a variable, which is how this
+        # would actually arrive - went straight through it. This asks a different and
+        # stronger question: does the word Method appear as a parameter or as a
+        # hashtable key at all? In a repository whose HTTP layer has no -Method
+        # parameter by design, the answer has to be no, whatever the value is.
         foreach ($file in ($script:ModuleSource + $script:EntryPointSource)) {
-            $source = Get-Content -LiteralPath $file.FullName -Raw
-            foreach ($method in @('Post', 'Put', 'Patch', 'Delete')) {
-                $source | Should -Not -Match ("Method\s*=\s*'" + $method + "'") -Because "$($file.Name) must not send $method"
-                $source | Should -Not -Match ("-Method\s+'?" + $method) -Because "$($file.Name) must not send $method"
+            $parseError = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref] $null, [ref] $parseError)
+            @($parseError).Where({ $_ }).Count | Should -Be 0 -Because "$($file.Name) must parse"
+
+            # -Method as a command parameter, whatever follows it.
+            $asParameter = @($ast.FindAll({
+                $args[0] -is [System.Management.Automation.Language.CommandParameterAst] -and
+                $args[0].ParameterName -eq 'Method'
+            }, $true))
+            $asParameter.Count | Should -Be 0 -Because "$($file.Name) must not pass -Method to anything"
+
+            # Method = ... inside a splat or a request hashtable. The key is allowed
+            # to exist, because the HTTP layer sets it to Get explicitly rather than
+            # relying on a default - but only ever to that, as a literal. A variable
+            # there is the failure this guard exists for, and it is exactly what the
+            # text version could not see.
+            $methodKeys = @($ast.FindAll({
+                $args[0] -is [System.Management.Automation.Language.HashtableAst]
+            }, $true) | ForEach-Object { $_.KeyValuePairs } |
+                Where-Object { "$($_.Item1.Extent.Text)".Trim("'", '"') -eq 'Method' })
+            foreach ($pair in $methodKeys) {
+                # A hashtable value arrives wrapped as a pipeline of one element, so
+                # unwrap until an expression is reached rather than assuming a shape.
+                $value = $pair.Item2
+                while ($true) {
+                    if ($value -is [System.Management.Automation.Language.PipelineAst]) { $value = @($value.PipelineElements)[0]; continue }
+                    if ($value -is [System.Management.Automation.Language.CommandExpressionAst]) { $value = $value.Expression; continue }
+                    break
+                }
+                $value | Should -BeOfType [System.Management.Automation.Language.StringConstantExpressionAst] `
+                    -Because "$($file.Name) line $($pair.Item1.Extent.StartLineNumber) sets Method to something that is not a literal"
+                $value.Value | Should -Be 'Get' -Because "$($file.Name) line $($pair.Item1.Extent.StartLineNumber) sets Method to a verb other than Get"
             }
         }
     }
@@ -122,21 +156,35 @@ Describe 'No code path can write to Jenkins or Jira' {
         # A shallow fetch adds objects and moves FETCH_HEAD, which is safe. checkout,
         # reset, pull, merge, commit and push are not: they would alter somebody's
         # clone while they were working in it.
+        #
+        # Read from the parse tree, not from the text. The previous version required
+        # the forbidden word to be followed by a comma, so it missed the LAST element
+        # of an argument array - @('remote', 'push') passed it - and it also matched
+        # any string anywhere, including in prose. This walks every literal array
+        # handed to git and looks at the elements themselves.
+        $forbidden = @('checkout', 'reset', 'pull', 'merge', 'commit', 'push', 'clean', 'rebase', 'cherry-pick', 'switch', 'restore')
         foreach ($file in ($script:ModuleSource + $script:EntryPointSource)) {
-            $source = Get-Content -LiteralPath $file.FullName -Raw
-            foreach ($command in @('checkout', 'reset', 'pull', 'merge', 'commit', 'push', 'clean')) {
-                $source | Should -Not -Match ("'" + $command + "'\s*,") -Because "$($file.Name) must not run git $command"
+            $parseError = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref] $null, [ref] $parseError)
+            @($parseError).Where({ $_ }).Count | Should -Be 0 -Because "$($file.Name) must parse"
+
+            $arrays = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.ArrayLiteralAst] }, $true)
+            foreach ($array in $arrays) {
+                $literals = @($array.Elements |
+                    Where-Object { $_ -is [System.Management.Automation.Language.StringConstantExpressionAst] } |
+                    ForEach-Object { $_.Value })
+                foreach ($verb in $forbidden) {
+                    $literals | Should -Not -Contain $verb -Because "$($file.Name) line $($array.Extent.StartLineNumber) hands git the verb $verb"
+                }
             }
         }
     }
 
-    It 'never writes a password parameter default into a report' {
-        # A password parameter default is stored reversibly encrypted, not hashed. A
-        # report is the artefact that gets attached to a ticket.
-        $source = Get-Content -LiteralPath (Join-Path (Get-RepositoryRoot) 'foundation/modules/Jenkins.Jobs/Jenkins.Jobs.psm1') -Raw
-        $source | Should -Match 'Password\|Credentials'
-        $source | Should -Match 'not read'
-    }
+    # The behaviour that a password parameter default never reaches a report is
+    # asserted where it can be asserted: against a fixture, in
+    # Jenkins.Jobs.ConfigXml.Tests.ps1. What used to be here was a grep of the module
+    # source for two strings, one of them a comment - so it broke when somebody
+    # reworded the comment and passed when somebody introduced the regression.
 }
 
 Describe 'The shipped templates are executable, and contain nothing real' {
@@ -146,7 +194,7 @@ Describe 'The shipped templates are executable, and contain nothing real' {
         # rather than halfway through a run. This is that promise, exercised.
         $entryPoint = Join-Path (Get-RepositoryRoot) "automations/$Name/$EntryPoint"
         $template = Join-Path (Get-RepositoryRoot) "automations/$Name/config/$Template"
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $entryPoint -Command validate -ConfigurationPath $template 2>&1
+        $output = & (Get-PowerShellHostPath) -NoProfile -ExecutionPolicy Bypass -File $entryPoint -Command validate -ConfigurationPath $template 2>&1
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
     }
 

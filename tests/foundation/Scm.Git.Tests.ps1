@@ -108,10 +108,14 @@ Describe 'Compare-ScmText' {
     }
 
     It 'returns both fingerprints whatever the verdict, so a report can be re-checked' {
+        # Checked by value, not merely for being non-empty. The purpose stated in the
+        # test name is that a reader can re-derive the verdict from the report, and
+        # two fingerprints that were both the letter x would satisfy "not empty"
+        # while making that impossible.
         foreach ($pair in @(@('a', 'a'), @('a   ', 'a'), @('a', 'b'))) {
             $result = Compare-ScmText -Left $pair[0] -Right $pair[1]
-            $result.LeftFingerprint | Should -Not -BeNullOrEmpty
-            $result.RightFingerprint | Should -Not -BeNullOrEmpty
+            $result.LeftFingerprint | Should -Be (Get-TextFingerprint -Text $pair[0])
+            $result.RightFingerprint | Should -Be (Get-TextFingerprint -Text $pair[1])
         }
     }
 }
