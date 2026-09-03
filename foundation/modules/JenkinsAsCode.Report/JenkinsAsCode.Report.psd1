@@ -13,6 +13,7 @@
     FunctionsToExport = @(
         'Protect-SecretInText',
         'Remove-SensitiveValue',
+        'Get-JenkinsAsCodeProvenance',
         'Write-JenkinsAsCodeReport',
         'Format-JenkinsAsCodeReportMarkdown'
     )

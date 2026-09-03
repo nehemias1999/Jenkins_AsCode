@@ -259,6 +259,118 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($fullPath, $Content, $encoding)
 }
 
+function Get-JenkinsAsCodeProvenance {
+    <#
+    .SYNOPSIS
+        Returns the facts a report needs for somebody to reproduce the run.
+
+    .DESCRIPTION
+        A report used to record its conclusions and almost nothing about where they
+        came from. Four things were missing and each one made a specific question
+        unanswerable.
+
+        Who and where: a report attached to a ticket did not say who generated it or
+        from which machine.
+
+        Which code: no tool version and no repository commit, so "this report says
+        the branch specifier was X" could not be tied to the logic that read it.
+
+        Which declaration: the path was recorded, but the active declaration is
+        excluded from version control - so the path identifies a file that may have
+        changed since. A fingerprint of the content does identify it.
+
+        Which scope: the key filters restrict what is looked at and were not
+        recorded, so a report of two jobs and a report of forty differed only in a
+        total. That one is the dangerous one: "pending 0" reads as "everything is
+        aligned" when it can equally mean "only one job was examined". It is the same
+        mistake this repository refuses elsewhere - asserting something about what
+        was never compared.
+
+        The correlation id exists so an inventory and the plan from the same session
+        can be tied together by something better than adjacent timestamps.
+
+        Every value is read from the environment or passed in; nothing here contacts
+        anything.
+
+    .PARAMETER Command
+        Verb that produced the report.
+
+    .PARAMETER DeclarationPath
+        Path of the declaration that was read.
+
+    .PARAMETER DeclarationText
+        Content of that declaration, fingerprinted rather than stored. The
+        declaration holds no secrets by design - it names environment variables -
+        but a fingerprint is what identifies it, and storing the whole file would
+        make the report bulky for no gain.
+
+    .PARAMETER SchemaEngine
+        Which validator ran: the full one or the reduced 5.1 one. Recorded because
+        the reduced engine ignores several keywords, so a report from it carries
+        less assurance about its own declaration than one from the full engine - and
+        until now the only place that difference appeared was a message on screen.
+
+    .PARAMETER Scope
+        What the run was restricted to, or 'all' when it was not.
+
+    .PARAMETER RepositoryRoot
+        Root used to resolve the repository commit.
+
+    .EXAMPLE
+        Get-JenkinsAsCodeProvenance -Command plan -DeclarationPath $path -DeclarationText $text -SchemaEngine reduced -Scope all -RepositoryRoot $root
+
+    .OUTPUTS
+        An ordered dictionary, ready to merge into a report detail.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $Command,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $DeclarationPath,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $DeclarationText,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $SchemaEngine,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $Scope,
+        [Parameter(Mandatory)] [string] $RepositoryRoot
+    )
+
+    $declarationFingerprint = ''
+    if ($DeclarationText) {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $bytes = [Text.Encoding]::UTF8.GetBytes(($DeclarationText -replace "`r`n", "`n").TrimEnd("`n"))
+            $declarationFingerprint = 'sha256:' + ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
+        }
+        finally { $sha.Dispose() }
+    }
+
+    # Best effort, and silent when it fails. A checkout with no .git - a tarball, a
+    # vendored copy - is a legitimate way to run this, and a report is more useful
+    # with an empty commit field than not written at all.
+    $commit = ''
+    try {
+        $head = Join-Path $RepositoryRoot '.git/HEAD'
+        if (Test-Path -LiteralPath $head) {
+            $headText = (Get-Content -LiteralPath $head -Raw).Trim()
+            if ($headText -like 'ref: *') {
+                $refPath = Join-Path $RepositoryRoot ('.git/' + $headText.Substring(5).Trim())
+                if (Test-Path -LiteralPath $refPath) { $commit = (Get-Content -LiteralPath $refPath -Raw).Trim() }
+            }
+            else { $commit = $headText }
+        }
+    }
+    catch { $commit = '' }
+
+    return [ordered]@{
+        command                = $Command
+        correlationId          = [guid]::NewGuid().ToString()
+        runBy                  = "$($env:USERNAME)"
+        runOn                  = "$($env:COMPUTERNAME)"
+        repositoryCommit       = $commit
+        declarationPath        = $DeclarationPath
+        declarationFingerprint = $declarationFingerprint
+        schemaEngine           = $SchemaEngine
+        scope                  = if ($Scope) { $Scope } else { 'all' }
+    }
+}
 function Write-JenkinsAsCodeReport {
     <#
     .SYNOPSIS
@@ -463,6 +575,7 @@ function Format-JenkinsAsCodeReportMarkdown {
 Export-ModuleMember -Function @(
     'Protect-SecretInText',
     'Remove-SensitiveValue',
+    'Get-JenkinsAsCodeProvenance',
     'Write-JenkinsAsCodeReport',
     'Format-JenkinsAsCodeReportMarkdown'
 )

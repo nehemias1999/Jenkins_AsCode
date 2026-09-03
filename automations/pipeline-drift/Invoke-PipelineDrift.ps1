@@ -315,7 +315,12 @@ if ($validationProblem.Count -gt 0) {
     throw "The declaration satisfies its schema but is not executable:$([Environment]::NewLine)$detail"
 }
 
-Write-ModuleLog "Schema and invariants: $($declaredKeys.Count) pipeline(s). Working copies under $workingCopyRoot. Valid."
+# Which validator ran is part of the result, not a footnote. The reduced 5.1
+# engine ignores pattern, minimum, minItems and the oneOf family, so a report
+# from it carries less assurance about its own declaration than one from the
+# full engine - and this success line was the only place an operator ever saw.
+$schemaEngine = Get-JenkinsAsCodeSchemaEngine
+Write-ModuleLog "Schema and invariants: $($declaredKeys.Count) pipeline(s). Working copies under $workingCopyRoot. Valid ($schemaEngine validation)."
 
 if ($Command -eq 'validate') {
     Write-ModuleLog 'validate is offline and complete. Nothing was contacted, and no working copy was read.'
@@ -556,7 +561,21 @@ else {
     Join-Path $repositoryRoot ("artifacts/reports/{0}-{1}-{2}Z-{3}.json" -f $moduleName, $Command, $stamp, $unique)
 }
 
+# Provenance, so a report answers who produced it, from what code, against
+# which declaration and at what scope. The scope is the one that mattered most:
+# a filtered run and a whole one differed only in a total, so "pending 0" read
+# as "everything is aligned" when it could equally mean "one item was examined".
+$provenanceArgument = @{
+    Command         = $Command
+    DeclarationPath = $configurationPath
+    DeclarationText = (Get-Content -LiteralPath $configurationPath -Raw)
+    SchemaEngine    = $schemaEngine
+    Scope           = if ($PipelineKey.Count -gt 0) { 'pipelineKey=' + ($PipelineKey -join ',') } else { 'all' }
+    RepositoryRoot  = $repositoryRoot
+}
+
 $detail = [ordered]@{
+    provenance        = Get-JenkinsAsCodeProvenance @provenanceArgument
     controllerUrl     = $jenkinsContext.BaseUrl
     controllerVersion = $controllerVersion
     declarationPath   = $configurationPath

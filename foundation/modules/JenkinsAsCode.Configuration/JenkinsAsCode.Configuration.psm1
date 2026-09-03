@@ -172,6 +172,43 @@ function Resolve-JenkinsAsCodePath {
     return [System.IO.Path]::GetFullPath((Join-Path $RootPath $Path))
 }
 
+function Get-JenkinsAsCodeSchemaEngine {
+    <#
+    .SYNOPSIS
+        Names the schema validator this session will use.
+
+    .DESCRIPTION
+        Two engines exist and they are not equivalent. Test-Json -Schema is real
+        JSON Schema validation and needs PowerShell 6.1 or later. On Windows
+        PowerShell 5.1 - the declared support floor - a reduced validator written
+        here runs instead, and it ignores pattern, minimum, minLength, minItems,
+        uniqueItems, format and the oneOf family. A declaration that violates any of
+        those passes validate on 5.1 and fails later, usually at the first request.
+
+        Detected by capability rather than by version, so a future host that gains
+        the parameter is not misclassified by a version comparison.
+
+        Exported because the difference belongs in the report and in what an
+        operator is told. Before this, a run on 5.1 said "Valid." with no
+        qualification, which is the one place the difference actually mattered.
+
+    .EXAMPLE
+        Get-JenkinsAsCodeSchemaEngine
+
+        Test-Json
+
+    .OUTPUTS
+        'Test-Json' for the full engine, 'reduced' for the 5.1 one.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    $supportsSchema = (Get-Command Test-Json -ErrorAction SilentlyContinue) -and
+                      (Get-Command Test-Json).Parameters.ContainsKey('Schema')
+    if ($supportsSchema) { return 'Test-Json' }
+    return 'reduced'
+}
 function Test-JenkinsAsCodeConfiguration {
     <#
     .SYNOPSIS
@@ -545,6 +582,7 @@ function Get-JenkinsAsCodeRequiredValue {
 Export-ModuleMember -Function @(
     'Import-JenkinsAsCodeEnvironment',
     'Resolve-JenkinsAsCodePath',
+    'Get-JenkinsAsCodeSchemaEngine',
     'Test-JenkinsAsCodeConfiguration',
     'Get-JenkinsAsCodeConfiguration',
     'Get-JenkinsAsCodeRequiredValue'

@@ -218,3 +218,77 @@ Describe 'Format-JenkinsAsCodeReportMarkdown' {
         $markdown | Should -Not -Match '\bnull\b'
     }
 }
+
+Describe 'Get-JenkinsAsCodeProvenance' {
+
+    BeforeAll {
+        $script:ProvenanceArgument = @{
+            Command         = 'plan'
+            DeclarationPath = 'automations/job-inventory/config/jobs.json'
+            DeclarationText = '{ "folders": ["EXAMPLE-FOLDER"] }'
+            SchemaEngine    = 'reduced'
+            Scope           = 'jobKey=example-pipeline'
+            RepositoryRoot  = (Get-RepositoryRoot)
+        }
+    }
+
+    It 'records the scope, which is what made pending zero ambiguous' {
+        # A filtered run and a whole one differed only in a total, so a report saying
+        # nothing is pending could equally mean everything is aligned or one item was
+        # looked at. This is the field that tells them apart.
+        (Get-JenkinsAsCodeProvenance @script:ProvenanceArgument).scope | Should -Be 'jobKey=example-pipeline'
+    }
+
+    It 'says all when nothing restricted the run' {
+        $unfiltered = $script:ProvenanceArgument.Clone()
+        $unfiltered.Scope = ''
+        (Get-JenkinsAsCodeProvenance @unfiltered).scope | Should -Be 'all'
+    }
+
+    It 'fingerprints the declaration rather than storing its path alone' {
+        # The active declaration is excluded from version control, so a path
+        # identifies a file that may have changed since. The content does not.
+        $result = Get-JenkinsAsCodeProvenance @script:ProvenanceArgument
+        $result.declarationFingerprint | Should -Match '^sha256:[0-9a-f]{64}$'
+    }
+
+    It 'gives the same fingerprint for CRLF and LF' {
+        # Same reasoning as Get-TextFingerprint: a declaration checked out on Windows
+        # and the same declaration on Linux must not look like two different files.
+        $lf = $script:ProvenanceArgument.Clone()
+        $lf.DeclarationText = "line one`nline two"
+        $crlf = $script:ProvenanceArgument.Clone()
+        $crlf.DeclarationText = "line one`r`nline two"
+        (Get-JenkinsAsCodeProvenance @lf).declarationFingerprint |
+            Should -Be (Get-JenkinsAsCodeProvenance @crlf).declarationFingerprint
+    }
+    It 'records the engine that validated, because the two are not equivalent' {
+        (Get-JenkinsAsCodeProvenance @script:ProvenanceArgument).schemaEngine | Should -Be 'reduced'
+    }
+
+    It 'gives every run its own correlation id' {
+        # So an inventory and the plan from the same session can be tied together by
+        # something better than adjacent timestamps.
+        $first = (Get-JenkinsAsCodeProvenance @script:ProvenanceArgument).correlationId
+        $second = (Get-JenkinsAsCodeProvenance @script:ProvenanceArgument).correlationId
+        $first | Should -Not -Be $second
+    }
+
+    It 'reads the repository commit from this working copy' {
+        (Get-JenkinsAsCodeProvenance @script:ProvenanceArgument).repositoryCommit | Should -Match '^[0-9a-f]{40}$'
+    }
+
+    It 'leaves the commit empty rather than failing outside a working copy' {
+        # A tarball or a vendored copy is a legitimate way to run this, and a report
+        # is more useful with an empty field than not written at all.
+        $noGit = $script:ProvenanceArgument.Clone()
+        $noGit.RepositoryRoot = [System.IO.Path]::GetTempPath()
+        (Get-JenkinsAsCodeProvenance @noGit).repositoryCommit | Should -Be ''
+    }
+
+    It 'names who ran it and from where' {
+        $result = Get-JenkinsAsCodeProvenance @script:ProvenanceArgument
+        $result.runBy | Should -Not -BeNullOrEmpty
+        $result.Keys -contains 'runOn' | Should -BeTrue
+    }
+}
