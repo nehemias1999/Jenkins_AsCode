@@ -172,6 +172,103 @@ function Resolve-JenkinsAsCodePath {
     return [System.IO.Path]::GetFullPath((Join-Path $RootPath $Path))
 }
 
+function Resolve-JenkinsAsCodeDeclaration {
+    <#
+    .SYNOPSIS
+        Decides which declaration file a run will read.
+
+    .DESCRIPTION
+        The rule is the same for every automation: an explicit path wins; otherwise
+        the active declaration if it exists; otherwise the versioned template. It was
+        written out three times, character for character, in the three entry points -
+        and this repository's own rule says that what all of them need belongs in the
+        shared layer, because a rule implemented three times is a rule that drifts.
+
+        The fallback to the template is what keeps validate runnable in a fresh clone,
+        where the active file does not exist yet. It is returned rather than logged
+        here, because this module knows nothing about how a caller reports - but a
+        caller must report it, so that a run never silently checks the template while
+        the operator believes it checked their own declaration. Callers say it out loud AND record
+        it, since a plan built from the template describes an example and not an
+        estate.
+
+    .PARAMETER ProjectContext
+        Parsed project context, whose automations section names both paths.
+
+    .PARAMETER Module
+        Automation name, used to look itself up in that section.
+
+    .PARAMETER RepositoryRoot
+        Root that relative paths resolve against.
+
+    .PARAMETER ConfigurationPath
+        Explicit override. When given, nothing else is consulted.
+
+    .EXAMPLE
+        $declaration = Resolve-JenkinsAsCodeDeclaration -ProjectContext $ctx -Module 'job-inventory' -RepositoryRoot $root
+
+    .OUTPUTS
+        An object with Path and UsedTemplate.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [object] $ProjectContext,
+        [Parameter(Mandatory)] [string] $Module,
+        [Parameter(Mandatory)] [string] $RepositoryRoot,
+        [AllowEmptyString()] [string] $ConfigurationPath
+    )
+
+    if ($ConfigurationPath) {
+        return [pscustomobject]@{
+            Path         = Resolve-JenkinsAsCodePath -Path $ConfigurationPath -RootPath $RepositoryRoot
+            UsedTemplate = $false
+            ActivePath   = ''
+        }
+    }
+
+    $moduleContext = $ProjectContext.automations.$Module
+    $active = Resolve-JenkinsAsCodePath -Path $moduleContext.configuration -RootPath $RepositoryRoot
+    if (Test-Path -LiteralPath $active) {
+        return [pscustomobject]@{ Path = $active; UsedTemplate = $false; ActivePath = $active }
+    }
+
+    return [pscustomobject]@{
+        Path         = Resolve-JenkinsAsCodePath -Path $moduleContext.template -RootPath $RepositoryRoot
+        UsedTemplate = $true
+        ActivePath   = $active
+    }
+}
+
+function Get-JenkinsAsCodeDuplicateValue {
+    <#
+    .SYNOPSIS
+        Returns the values that appear more than once.
+
+    .DESCRIPTION
+        Duplicate keys in a declaration are checked six times across the three entry
+        points with the same three-stage pipeline each time. Two entries for one
+        resource would each report their own verdict about it, which is why every
+        automation checks - and why the check belongs in one place.
+
+    .PARAMETER Value
+        Values to inspect. An empty input yields nothing rather than failing.
+
+    .EXAMPLE
+        Get-JenkinsAsCodeDuplicateValue -Value @('a', 'b', 'a')
+
+        a
+
+    .OUTPUTS
+        Each duplicated value, once.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Value
+    )
+
+    if ($Value.Count -eq 0) { return @() }
+    return @($Value | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+}
 function Get-JenkinsAsCodeSchemaEngine {
     <#
     .SYNOPSIS
@@ -582,6 +679,8 @@ function Get-JenkinsAsCodeRequiredValue {
 Export-ModuleMember -Function @(
     'Import-JenkinsAsCodeEnvironment',
     'Resolve-JenkinsAsCodePath',
+    'Resolve-JenkinsAsCodeDeclaration',
+    'Get-JenkinsAsCodeDuplicateValue',
     'Get-JenkinsAsCodeSchemaEngine',
     'Test-JenkinsAsCodeConfiguration',
     'Get-JenkinsAsCodeConfiguration',

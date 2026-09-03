@@ -11,6 +11,8 @@
     FunctionsToExport = @(
         'Import-JenkinsAsCodeEnvironment',
         'Resolve-JenkinsAsCodePath',
+        'Resolve-JenkinsAsCodeDeclaration',
+        'Get-JenkinsAsCodeDuplicateValue',
         'Get-JenkinsAsCodeSchemaEngine',
         'Test-JenkinsAsCodeConfiguration',
         'Get-JenkinsAsCodeConfiguration',

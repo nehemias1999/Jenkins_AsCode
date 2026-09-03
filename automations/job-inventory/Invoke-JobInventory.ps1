@@ -292,20 +292,15 @@ $projectContextPathResolved = if ($ProjectContextPath) { $ProjectContextPath } e
 $projectContextPathResolved = Resolve-JenkinsAsCodePath -Path $projectContextPathResolved -RootPath $repositoryRoot
 $projectContext = Get-JenkinsAsCodeConfiguration -Path $projectContextPathResolved
 
-$moduleContext = $projectContext.automations.$moduleName
-if ($ConfigurationPath) {
-    $configurationPath = Resolve-JenkinsAsCodePath -Path $ConfigurationPath -RootPath $repositoryRoot
-}
-else {
-    $active = Resolve-JenkinsAsCodePath -Path $moduleContext.configuration -RootPath $repositoryRoot
-    if (Test-Path -LiteralPath $active) {
-        $configurationPath = $active
-    }
-    else {
-        $configurationPath = Resolve-JenkinsAsCodePath -Path $moduleContext.template -RootPath $repositoryRoot
-        $usedTemplate = $true
-        Write-ModuleLog "No active declaration at $active. Using the versioned template instead: $configurationPath. The report will describe the example, not an estate." -Level warning
-    }
+# The rule - explicit path, else the active declaration, else the template - is the
+# same for all three automations, so it lives in the shared layer rather than being
+# written out three times. Saying it out loud stays here, because the shared layer
+# knows nothing about how a caller reports.
+$declarationChoice = Resolve-JenkinsAsCodeDeclaration -ProjectContext $projectContext -Module $moduleName -RepositoryRoot $repositoryRoot -ConfigurationPath $ConfigurationPath
+$configurationPath = $declarationChoice.Path
+$usedTemplate = $declarationChoice.UsedTemplate
+if ($usedTemplate) {
+    Write-ModuleLog "No active declaration at $($declarationChoice.ActivePath). Using the versioned template instead: $configurationPath. The report will describe the example, not an estate." -Level warning
 }
 
 $declaration = Get-JenkinsAsCodeConfiguration -Path $configurationPath
@@ -316,13 +311,13 @@ Write-ModuleLog "Declaration: $configurationPath"
 $validationProblem = New-Object System.Collections.ArrayList
 
 $declaredKeys = @($declaration.jobs | ForEach-Object { $_.key })
-$duplicateKeys = @($declaredKeys | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+$duplicateKeys = @(Get-JenkinsAsCodeDuplicateValue -Value $declaredKeys)
 if ($duplicateKeys.Count -gt 0) {
     $null = $validationProblem.Add("Duplicate job key(s): $($duplicateKeys -join ', '). A key names a row in every report.")
 }
 
 $declaredPaths = @($declaration.jobs | ForEach-Object { $_.path })
-$duplicatePaths = @($declaredPaths | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+$duplicatePaths = @(Get-JenkinsAsCodeDuplicateValue -Value $declaredPaths)
 if ($duplicatePaths.Count -gt 0) {
     $null = $validationProblem.Add("Duplicate job path(s): $($duplicatePaths -join ', '). Two declarations for one job would each report their own verdict about it.")
 }
@@ -507,9 +502,7 @@ Write-PlanSummary -Plan $plan
 
 # --- Evidence -------------------------------------------------------------
 
-$reportPathResolved = if ($ReportPath) {
-    Resolve-JenkinsAsCodePath -Path $ReportPath -RootPath $repositoryRoot
-}
+$reportPathResolved = Get-JenkinsAsCodeReportPath -RepositoryRoot $repositoryRoot -Module $moduleName -Command $Command -ReportPath $ReportPath
 else {
     # UTC, and unique rather than merely precise. Local time in the name while the
     # content is UTC meant the lexicographic order of a directory was not the

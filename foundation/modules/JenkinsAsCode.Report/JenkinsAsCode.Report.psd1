@@ -8,11 +8,12 @@
     Description       = 'Evidence writing: plan reports as JSON and Markdown, with redaction by property name and masking by value applied at the writer rather than at each call site.'
     PowerShellVersion = '5.1'
 
-    RequiredModules   = @('JenkinsAsCode.Plan')
+    RequiredModules   = @('JenkinsAsCode.Plan', 'JenkinsAsCode.Configuration')
 
     FunctionsToExport = @(
         'Protect-SecretInText',
         'Remove-SensitiveValue',
+        'Get-JenkinsAsCodeReportPath',
         'Start-JenkinsAsCodeRunLog',
         'Add-JenkinsAsCodeRunLogLine',
         'Get-JenkinsAsCodeProvenance',

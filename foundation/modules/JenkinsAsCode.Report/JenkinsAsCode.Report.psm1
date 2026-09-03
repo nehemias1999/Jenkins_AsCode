@@ -259,6 +259,56 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($fullPath, $Content, $encoding)
 }
 
+function Get-JenkinsAsCodeReportPath {
+    <#
+    .SYNOPSIS
+        Decides where a run writes its report.
+
+    .DESCRIPTION
+        An explicit path wins; otherwise a generated one under artifacts/reports. The
+        generated name is UTC and unique, not merely precise: local time in the name
+        while the content records UTC meant a directory's lexicographic order was not
+        its chronological one, and in the autumn clock change two runs an hour apart
+        landed on the same name. One second of granularity collided on its own anyway
+        - two runs of the same command in the same second overwrote each other, and
+        the writer truncates without a word.
+
+        Written out three times in the three entry points before this.
+
+    .PARAMETER RepositoryRoot
+        Root that the generated path is relative to.
+
+    .PARAMETER Module
+        Automation name, used in the file name.
+
+    .PARAMETER Command
+        Verb, used in the file name.
+
+    .PARAMETER ReportPath
+        Explicit override. When given, nothing is generated.
+
+    .EXAMPLE
+        Get-JenkinsAsCodeReportPath -RepositoryRoot $root -Module 'job-inventory' -Command 'plan'
+
+    .OUTPUTS
+        The path to write to.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)] [string] $RepositoryRoot,
+        [Parameter(Mandatory)] [string] $Module,
+        [Parameter(Mandatory)] [string] $Command,
+        [AllowEmptyString()] [string] $ReportPath
+    )
+
+    if ($ReportPath) {
+        return (Resolve-JenkinsAsCodePath -Path $ReportPath -RootPath $RepositoryRoot)
+    }
+    $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
+    $unique = [guid]::NewGuid().ToString('N').Substring(0, 6)
+    return (Join-Path $RepositoryRoot ("artifacts/reports/{0}-{1}-{2}Z-{3}.json" -f $Module, $Command, $stamp, $unique))
+}
 function Start-JenkinsAsCodeRunLog {
     <#
     .SYNOPSIS
@@ -705,6 +755,7 @@ function Format-JenkinsAsCodeReportMarkdown {
 Export-ModuleMember -Function @(
     'Protect-SecretInText',
     'Remove-SensitiveValue',
+    'Get-JenkinsAsCodeReportPath',
     'Start-JenkinsAsCodeRunLog',
     'Add-JenkinsAsCodeRunLogLine',
     'Get-JenkinsAsCodeProvenance',
