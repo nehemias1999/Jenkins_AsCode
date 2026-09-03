@@ -4,9 +4,11 @@
   "description": "Shared context: the NAME of every environment variable that carries a value, request defaults, and where each automation keeps its declaration. It holds no value that could be a secret.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["jenkins", "jira", "defaults", "automations"],
+  "required": ["version", "jenkins", "jira", "defaults", "automations"],
   "properties": {
     "$schema": { "type": "string" },
+
+    "version": { "type": "string", "description": "The one place this product states its version. The module manifests are aligned to it and a report records it, so a conclusion can be tied to the code that reached it." },
 
     "jenkins": {
       "type": "object",

@@ -1,6 +1,8 @@
 {
   "$schema": "../schemas/project-context.schema.json",
 
+  "version": "0.2.0",
+
   "jenkins": {
     "baseUrlEnv": "JENKINS_URL",
     "userEnv": "JENKINS_USER",

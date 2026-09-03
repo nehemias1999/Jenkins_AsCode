@@ -1,6 +1,6 @@
 @{
     RootModule        = 'Scm.Git.psm1'
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '0.2.0'
     GUID              = 'b90cd7b7-9d3e-4020-aab2-d84978c4b4dd'
     Author            = 'nehemias1999'
     CompanyName       = 'Unspecified'

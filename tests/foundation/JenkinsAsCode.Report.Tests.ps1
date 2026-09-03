@@ -229,6 +229,7 @@ Describe 'Get-JenkinsAsCodeProvenance' {
             SchemaEngine    = 'reduced'
             Scope           = 'jobKey=example-pipeline'
             RepositoryRoot  = (Get-RepositoryRoot)
+            ToolVersion     = '0.2.0'
         }
     }
 

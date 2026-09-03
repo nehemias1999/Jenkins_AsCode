@@ -316,6 +316,11 @@ function Get-JenkinsAsCodeProvenance {
     .PARAMETER RepositoryRoot
         Root used to resolve the repository commit.
 
+    .PARAMETER ToolVersion
+        Version this product states for itself, from the project context. Recorded
+        because a report is read long after the run, and "the branch specifier was
+        X" is only checkable against the code that read it.
+
     .EXAMPLE
         Get-JenkinsAsCodeProvenance -Command plan -DeclarationPath $path -DeclarationText $text -SchemaEngine reduced -Scope all -RepositoryRoot $root
 
@@ -329,7 +334,8 @@ function Get-JenkinsAsCodeProvenance {
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $DeclarationText,
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $SchemaEngine,
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $Scope,
-        [Parameter(Mandatory)] [string] $RepositoryRoot
+        [Parameter(Mandatory)] [string] $RepositoryRoot,
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $ToolVersion
     )
 
     $declarationFingerprint = ''
@@ -361,6 +367,7 @@ function Get-JenkinsAsCodeProvenance {
 
     return [ordered]@{
         command                = $Command
+        toolVersion            = $ToolVersion
         correlationId          = [guid]::NewGuid().ToString()
         runBy                  = "$($env:USERNAME)"
         runOn                  = "$($env:COMPUTERNAME)"

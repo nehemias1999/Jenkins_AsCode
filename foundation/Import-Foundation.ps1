@@ -37,9 +37,15 @@
     . (Join-Path $repoRoot 'foundation/Import-Foundation.ps1')
 
 .EXAMPLE
-    $FoundationForce = $true; . (Join-Path $repoRoot 'foundation/Import-Foundation.ps1')
+    . (Join-Path $repoRoot 'foundation/Import-Foundation.ps1') -FoundationForce
 
     Reloads every foundation module in the current session.
+
+    Passed as an argument, not assigned beforehand. Setting $FoundationForce first
+    and then dot-sourcing does NOT work: the param block below runs in the caller's
+    scope and rebinds the switch to its default, so the assignment is overwritten and
+    nothing is reloaded - silently, which is exactly the stale-copy confusion the
+    switch exists to resolve. That is what this example used to say to do.
 #>
 
 [CmdletBinding()]

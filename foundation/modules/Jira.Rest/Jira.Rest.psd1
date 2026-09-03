@@ -1,6 +1,6 @@
 @{
     RootModule        = 'Jira.Rest.psm1'
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '0.2.0'
     GUID              = '3beef8b3-4092-4b9e-9173-16d017b96412'
     Author            = 'nehemias1999'
     CompanyName       = 'Unspecified'

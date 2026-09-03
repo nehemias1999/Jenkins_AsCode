@@ -644,13 +644,8 @@ function Get-JenkinsJobDefinition {
 }
 
 Export-ModuleMember -Function @(
-    'Get-JenkinsJobTypeName',
     'ConvertTo-Xml10Text',
     'Test-JenkinsContainerClass',
-    'Get-XmlNodeText',
-    'Get-JenkinsJobParameter',
-    'Get-JenkinsJobTrigger',
-    'Get-JenkinsJobScm',
     'ConvertFrom-JenkinsJobConfigXml',
     'Get-JenkinsFolderChild',
     'Get-JenkinsJobTree',

@@ -1,6 +1,6 @@
 @{
     RootModule        = 'Jenkins.Jobs.psm1'
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '0.2.0'
     GUID              = '82d5bdf9-c6c5-45c3-aa5a-f57c7caee034'
     Author            = 'nehemias1999'
     CompanyName       = 'Unspecified'
@@ -11,13 +11,8 @@
     RequiredModules   = @('Jenkins.Rest')
 
     FunctionsToExport = @(
-        'Get-JenkinsJobTypeName',
         'ConvertTo-Xml10Text',
         'Test-JenkinsContainerClass',
-        'Get-XmlNodeText',
-        'Get-JenkinsJobParameter',
-        'Get-JenkinsJobTrigger',
-        'Get-JenkinsJobScm',
         'ConvertFrom-JenkinsJobConfigXml',
         'Get-JenkinsFolderChild',
         'Get-JenkinsJobTree',

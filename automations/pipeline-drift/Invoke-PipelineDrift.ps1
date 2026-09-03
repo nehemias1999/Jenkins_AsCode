@@ -93,13 +93,31 @@ function Write-ModuleLog {
         all. Masking at the funnel rather than at each call site means a log line
         added later cannot reintroduce the leak.
 
+        Severity is a parameter because everything used to come out identically: a
+        job that could not be read looked exactly like a folder listing, same prefix,
+        same stream, same prominence. A reader scanning the tail of a long run had no
+        way to pick the failures out, and nothing downstream could filter them.
+
     .PARAMETER Message
         Text to write.
+
+    .PARAMETER Level
+        info for progress, warning for something a person needs to read. A warning
+        goes to the warning stream, so a caller can capture or redirect it on its
+        own.
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory)] [string] $Message)
+    param(
+        [Parameter(Mandatory)] [string] $Message,
+        [ValidateSet('info', 'warning')] [string] $Level = 'info'
+    )
 
-    Write-Information "[$moduleName] $(Protect-SecretInText -Text $Message)" -InformationAction Continue
+    $masked = Protect-SecretInText -Text $Message
+    if ($Level -eq 'warning') {
+        Write-Warning "[$moduleName] $masked"
+        return
+    }
+    Write-Information "[$moduleName] $masked" -InformationAction Continue
 }
 
 function Get-JenkinsfileAgentLabel {
@@ -420,7 +438,7 @@ foreach ($pipeline in $selected) {
         # One unreachable repository or unreadable job must not end the run. The
         # failure is recorded against that pipeline and becomes a blocked operation.
         $record.failure = $_.Exception.Message
-        Write-ModuleLog "pipeline '$($pipeline.key)' failed: $($_.Exception.Message)"
+        Write-ModuleLog "pipeline '$($pipeline.key)' failed: $($_.Exception.Message)" -Level warning
     }
 
     $null = $observation.Add([pscustomobject]$record)
@@ -572,6 +590,7 @@ $provenanceArgument = @{
     SchemaEngine    = $schemaEngine
     Scope           = if ($PipelineKey.Count -gt 0) { 'pipelineKey=' + ($PipelineKey -join ',') } else { 'all' }
     RepositoryRoot  = $repositoryRoot
+    ToolVersion     = "$($projectContext.version)"
 }
 
 $detail = [ordered]@{
@@ -636,7 +655,7 @@ if ($Command -eq 'smoke') {
 #   1  the run itself failed (an uncaught throw: bad declaration, no credential,
 #      controller unreachable)
 if (Test-PlanBlocked -Plan $plan) {
-    Write-ModuleLog 'The plan contains blocked operation(s). Each one needs a person, not a retry.'
+    Write-ModuleLog 'The plan contains blocked operation(s). Each one needs a person, not a retry.' -Level warning
     exit 2
 }
 

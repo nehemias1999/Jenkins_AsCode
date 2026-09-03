@@ -1,6 +1,6 @@
 @{
     RootModule        = 'JenkinsAsCode.Report.psm1'
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '0.2.0'
     GUID              = '8aab5e90-5019-4987-8191-d5550ea5965d'
     Author            = 'nehemias1999'
     CompanyName       = 'Unspecified'
