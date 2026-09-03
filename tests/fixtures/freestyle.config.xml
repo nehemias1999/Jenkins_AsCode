@@ -1,0 +1,25 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<project>
+  <description>Invented fixture: freestyle job with an agent label and an SCM.</description>
+  <assignedNode>EXAMPLE-AGENT-1</assignedNode>
+  <canRoam>false</canRoam>
+  <disabled>false</disabled>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@5.2.0">
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>https://github.example.com/example-org/example-freestyle.git</url>
+        <credentialsId>example-scm-credential</credentialsId>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>refs/heads/main</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+  </scm>
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/5 * * * *</spec>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+</project>

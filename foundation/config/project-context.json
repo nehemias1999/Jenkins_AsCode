@@ -1,0 +1,38 @@
+{
+  "$schema": "../schemas/project-context.schema.json",
+
+  "jenkins": {
+    "baseUrlEnv": "JENKINS_URL",
+    "userEnv": "JENKINS_USER",
+    "tokenEnv": "JENKINS_API_TOKEN"
+  },
+
+  "jira": {
+    "baseUrlEnv": "JIRA_BASE_URL",
+    "emailEnv": "JIRA_EMAIL",
+    "tokenEnv": "JIRA_API_TOKEN",
+    "apiVersion": "3"
+  },
+
+  "defaults": {
+    "requestTimeoutSeconds": 60,
+    "maximumRetryCount": 3,
+    "retryAfterCapSeconds": 120,
+    "jenkinsfilePath": "Jenkinsfile"
+  },
+
+  "automations": {
+    "job-inventory": {
+      "configuration": "automations/job-inventory/config/jobs.json",
+      "template": "automations/job-inventory/config/jobs.example.json"
+    },
+    "pipeline-drift": {
+      "configuration": "automations/pipeline-drift/config/pipelines.json",
+      "template": "automations/pipeline-drift/config/pipelines.example.json"
+    },
+    "jira-inventory": {
+      "configuration": "automations/jira-inventory/config/issues.json",
+      "template": "automations/jira-inventory/config/issues.example.json"
+    }
+  }
+}

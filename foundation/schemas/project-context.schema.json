@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Jenkins_AsCode project context",
+  "description": "Shared context: the NAME of every environment variable that carries a value, request defaults, and where each automation keeps its declaration. It holds no value that could be a secret.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jenkins", "jira", "defaults", "automations"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "jenkins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseUrlEnv", "userEnv", "tokenEnv"],
+      "properties": {
+        "baseUrlEnv": { "$ref": "#/definitions/environmentVariableName" },
+        "userEnv": { "$ref": "#/definitions/environmentVariableName" },
+        "tokenEnv": { "$ref": "#/definitions/environmentVariableName" }
+      }
+    },
+
+    "jira": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseUrlEnv", "emailEnv", "tokenEnv", "apiVersion"],
+      "properties": {
+        "baseUrlEnv": { "$ref": "#/definitions/environmentVariableName" },
+        "emailEnv": { "$ref": "#/definitions/environmentVariableName" },
+        "tokenEnv": { "$ref": "#/definitions/environmentVariableName" },
+        "apiVersion": { "type": "string", "enum": ["2", "3"] }
+      }
+    },
+
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestTimeoutSeconds", "maximumRetryCount", "retryAfterCapSeconds", "jenkinsfilePath"],
+      "properties": {
+        "requestTimeoutSeconds": { "type": "integer" },
+        "maximumRetryCount": { "type": "integer" },
+        "retryAfterCapSeconds": { "type": "integer" },
+        "jenkinsfilePath": { "type": "string" }
+      }
+    },
+
+    "automations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job-inventory", "pipeline-drift", "jira-inventory"],
+      "properties": {
+        "job-inventory": { "$ref": "#/definitions/automationPaths" },
+        "pipeline-drift": { "$ref": "#/definitions/automationPaths" },
+        "jira-inventory": { "$ref": "#/definitions/automationPaths" }
+      }
+    }
+  },
+
+  "definitions": {
+    "environmentVariableName": {
+      "type": "string",
+      "description": "The NAME of an environment variable, never its value."
+    },
+    "automationPaths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration", "template"],
+      "properties": {
+        "configuration": { "type": "string", "description": "Active declaration. Excluded from version control." },
+        "template": { "type": "string", "description": "Versioned template the active file is created by renaming." }
+      }
+    }
+  }
+}

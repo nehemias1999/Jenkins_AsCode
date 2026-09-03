@@ -1,0 +1,14 @@
+{
+  "$schema": "../schemas/pipelines.schema.json",
+
+  "workingCopyRoot": "../repos",
+
+  "pipelines": [
+    {
+      "key": "example-pipeline",
+      "jobPath": "EXAMPLE-FOLDER/example-pipeline",
+      "workingCopy": "example_pipeline",
+      "remoteName": "origin"
+    }
+  ]
+}

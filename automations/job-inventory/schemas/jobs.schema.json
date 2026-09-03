@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "job-inventory declaration",
+  "description": "The Jenkins jobs this repository claims to know about, and what each one is expected to be configured as. It is not written by hand: the first inventory run discovers the controller, and the declaration is derived from that snapshot. Nothing here is a credential.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["folders", "maximumDepth", "jobs"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "folders": {
+      "type": "array",
+      "description": "Folders to walk. An empty string walks the controller root.",
+      "items": { "type": "string" }
+    },
+
+    "maximumDepth": {
+      "type": "integer",
+      "description": "Levels to descend below each starting folder. A bound exists so a walk cannot run away on a controller whose folders discover their own children."
+    },
+
+    "jobs": {
+      "type": "array",
+      "description": "Declared jobs. A job found on the controller but absent here is reported as undeclared and never altered.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "path", "expected"],
+        "properties": {
+          "key": { "type": "string", "description": "Stable short name used in reports." },
+          "path": { "type": "string", "description": "Display path, folder segments separated by /." },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "enabled"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["pipeline", "freestyle", "multibranch", "folder", "maven", "matrix", "organization-folder"]
+              },
+              "enabled": { "type": "boolean", "description": "false means the job is expected to be disabled." },
+              "scmUrl": { "type": "string", "description": "Repository the job reads. Omit for a job with no SCM." },
+              "branchSpecifier": { "type": "string", "description": "As stored in config.xml, verbatim: */main and refs/heads/main are different spellings and both are recorded as written." },
+              "scriptPath": { "type": "string", "description": "Path of the Jenkinsfile within the repository." }
+            }
+          }
+        }
+      }
+    }
+  }
+}

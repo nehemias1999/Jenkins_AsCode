@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/jobs.schema.json",
+
+  "folders": ["EXAMPLE-FOLDER"],
+  "maximumDepth": 8,
+
+  "jobs": [
+    {
+      "key": "example-pipeline",
+      "path": "EXAMPLE-FOLDER/example-pipeline",
+      "expected": {
+        "type": "pipeline",
+        "enabled": true,
+        "scmUrl": "https://github.example.com/example-org/example-pipeline.git",
+        "branchSpecifier": "*/main",
+        "scriptPath": "Jenkinsfile"
+      }
+    }
+  ]
+}

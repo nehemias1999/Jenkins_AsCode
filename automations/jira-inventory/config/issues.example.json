@@ -1,0 +1,22 @@
+{
+  "$schema": "../schemas/issues.schema.json",
+
+  "projectKeys": ["EXAMPLE"],
+
+  "customFields": [
+    {
+      "key": "stage",
+      "displayName": "Example Stage",
+      "purpose": "Read by a pipeline to decide where a ticket is delivered. Its API id is opaque and must be resolved by display name."
+    }
+  ],
+
+  "queries": [
+    {
+      "key": "awaiting-delivery",
+      "jql": "project = EXAMPLE AND status = 'Example Status' ORDER BY key ASC",
+      "fields": ["status", "summary"],
+      "expectation": "any"
+    }
+  ]
+}

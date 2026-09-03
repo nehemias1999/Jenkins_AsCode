@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "jira-inventory declaration",
+  "description": "What this repository reads from Jira. It names projects, the custom fields whose opaque ids must be resolved by display name, and the JQL queries whose results are worth recording. It holds no credential and performs no write.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["projectKeys", "customFields", "queries"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "projectKeys": {
+      "type": "array",
+      "description": "Project keys in scope, for example EXAMPLE.",
+      "items": { "type": "string" }
+    },
+
+    "customFields": {
+      "type": "array",
+      "description": "Custom fields to resolve from display name to API id.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "displayName", "purpose"],
+        "properties": {
+          "key": { "type": "string", "description": "Stable short name used in reports." },
+          "displayName": { "type": "string", "description": "Name as shown in Jira. Resolution is case-insensitive." },
+          "purpose": { "type": "string", "description": "Why this field matters. A declaration nobody can explain is one nobody can retire." }
+        }
+      }
+    },
+
+    "queries": {
+      "type": "array",
+      "description": "JQL queries whose results are recorded.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "jql", "expectation"],
+        "properties": {
+          "key": { "type": "string" },
+          "jql": { "type": "string" },
+          "fields": { "type": "array", "items": { "type": "string" } },
+          "expectation": {
+            "type": "string",
+            "description": "What a healthy result looks like. 'any' records the count without judging it; 'non-empty' reports a warning when the query returns nothing, which is how a silently broken JQL is caught.",
+            "enum": ["any", "non-empty"]
+          }
+        }
+      }
+    }
+  }
+}

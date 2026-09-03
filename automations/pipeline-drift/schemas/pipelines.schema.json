@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pipeline-drift declaration",
+  "description": "Maps each Jenkins job to the local working copy of the repository it reads. The branch, the commit and the script path are not declared here - they are read from the live job, because declaring them would mean asserting the very thing this module exists to verify.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workingCopyRoot", "pipelines"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "workingCopyRoot": {
+      "type": "string",
+      "description": "Directory holding the clones, relative to the repository root or absolute."
+    },
+
+    "pipelines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "jobPath", "workingCopy"],
+        "properties": {
+          "key": { "type": "string", "description": "Stable short name used in reports." },
+          "jobPath": { "type": "string", "description": "Display path of the Jenkins job, folder segments separated by /." },
+          "workingCopy": { "type": "string", "description": "Directory name under workingCopyRoot." },
+          "remoteName": { "type": "string", "description": "Git remote to query. Defaults to origin." }
+        }
+      }
+    }
+  }
+}

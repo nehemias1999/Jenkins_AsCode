@@ -1,0 +1,6 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<project>
+  <description>Invented fixture: a job with SCM explicitly set to none.</description>
+  <scm class="hudson.scm.NullSCM"/>
+  <disabled>false</disabled>
+</project>
