@@ -1,0 +1,20 @@
+# Normalise line endings in the repository, so a clone is the same on any platform.
+# Without this, git's autocrlf setting decides what a checkout looks like, and the
+# same file differs between a Windows and a Linux working copy.
+#
+# The comparison code normalises CRLF to LF before fingerprinting anyway - see
+# Get-TextFingerprint - because a Jenkinsfile read from a commit and the same file
+# checked out on Windows must fingerprint identically. This file removes the
+# ambiguity a step earlier.
+* text=auto eol=lf
+
+# PowerShell reads these fine with either ending; LF keeps diffs clean.
+*.ps1  text eol=lf
+*.psm1 text eol=lf
+*.psd1 text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.xml  text eol=lf
+
+# Fixtures are compared byte for byte by the tests, so their endings are pinned.
+tests/fixtures/** text eol=lf
