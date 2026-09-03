@@ -358,12 +358,15 @@ $jenkinsContext = Get-JenkinsContext -ProjectContext $projectContext
 $controllerVersion = Get-JenkinsControllerVersion -Context $jenkinsContext
 Write-ModuleLog "Controller: $($jenkinsContext.BaseUrl), Jenkins $controllerVersion."
 
-$selected = if ($PipelineKey.Count -gt 0) {
+# The outer @() is load-bearing. See the note in job-inventory: an array flowing out
+# of a script block is unwrapped, so a -PipelineKey matching exactly one pipeline
+# left this holding the bare object and .Count threw on the next line.
+$selected = @(if ($PipelineKey.Count -gt 0) {
     @($declaration.pipelines | Where-Object { $PipelineKey -contains $_.key })
 }
 else {
     @($declaration.pipelines)
-}
+})
 if ($PipelineKey.Count -gt 0 -and $selected.Count -ne $PipelineKey.Count) {
     $missing = @($PipelineKey | Where-Object { $declaredKeys -notcontains $_ })
     throw "No declared pipeline with key(s): $($missing -join ', '). Declared keys: $($declaredKeys -join ', ')."
@@ -569,17 +572,6 @@ Write-PlanSummary -Plan $plan
 # --- Evidence -------------------------------------------------------------
 
 $reportPathResolved = Get-JenkinsAsCodeReportPath -RepositoryRoot $repositoryRoot -Module $moduleName -Command $Command -ReportPath $ReportPath
-else {
-    # UTC, and unique rather than merely precise. Local time in the name while the
-    # content is UTC meant the lexicographic order of a directory was not the
-    # chronological one, and in the autumn clock change two runs an hour apart landed
-    # on the same name. One second of granularity collided on its own anyway: two runs
-    # of the same command in the same second overwrote each other, and the writer
-    # truncates without a word. The suffix is what makes the name unique.
-    $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
-    $unique = [guid]::NewGuid().ToString('N').Substring(0, 6)
-    Join-Path $repositoryRoot ("artifacts/reports/{0}-{1}-{2}Z-{3}.json" -f $moduleName, $Command, $stamp, $unique)
-}
 
 # Provenance, so a report answers who produced it, from what code, against
 # which declaration and at what scope. The scope is the one that mattered most:

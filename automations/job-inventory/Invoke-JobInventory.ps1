@@ -439,12 +439,20 @@ foreach ($folder in @($declaration.folders)) {
     Add-PlanOperation -Plan $plan -Operation (New-PlanOperation -Resource 'folder' -Name "folder/$label" -Action $status.Action -Status $status.Status -Reason $status.Reason) | Out-Null
 }
 
-$selectedJobs = if ($JobKey.Count -gt 0) {
+# The outer @() is load-bearing, and its absence was a real defect. PowerShell
+# unwraps an array flowing out of a script block, so a -JobKey matching exactly ONE
+# job left $selectedJobs holding the bare object - and .Count on the line below then
+# threw under StrictMode, which is the one place it is guaranteed to run. The filter
+# was broken for a single key, and nothing noticed because nothing ever ran it.
+#
+# Fourth appearance of this trap in this repository; the other three are recorded in
+# the changelog. This one is the first that a test can see.
+$selectedJobs = @(if ($JobKey.Count -gt 0) {
     @($declaration.jobs | Where-Object { $JobKey -contains $_.key })
 }
 else {
     @($declaration.jobs)
-}
+})
 if ($JobKey.Count -gt 0 -and $selectedJobs.Count -ne $JobKey.Count) {
     $missing = @($JobKey | Where-Object { $declaredKeys -notcontains $_ })
     throw "No declared job with key(s): $($missing -join ', '). Declared keys: $($declaredKeys -join ', ')."
@@ -503,17 +511,6 @@ Write-PlanSummary -Plan $plan
 # --- Evidence -------------------------------------------------------------
 
 $reportPathResolved = Get-JenkinsAsCodeReportPath -RepositoryRoot $repositoryRoot -Module $moduleName -Command $Command -ReportPath $ReportPath
-else {
-    # UTC, and unique rather than merely precise. Local time in the name while the
-    # content is UTC meant the lexicographic order of a directory was not the
-    # chronological one, and in the autumn clock change two runs an hour apart landed
-    # on the same name. One second of granularity collided on its own anyway: two runs
-    # of the same command in the same second overwrote each other, and the writer
-    # truncates without a word. The suffix is what makes the name unique.
-    $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
-    $unique = [guid]::NewGuid().ToString('N').Substring(0, 6)
-    Join-Path $repositoryRoot ("artifacts/reports/{0}-{1}-{2}Z-{3}.json" -f $moduleName, $Command, $stamp, $unique)
-}
 
 # Provenance, so a report answers who produced it, from what code, against
 # which declaration and at what scope. The scope is the one that mattered most:
