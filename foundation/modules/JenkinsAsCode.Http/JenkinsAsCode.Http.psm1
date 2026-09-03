@@ -20,6 +20,20 @@ $ErrorActionPreference = 'Stop'
 
 $script:RetryableStatusCode = @(408, 429, 500, 502, 503, 504)
 
+# TLS floor, set once when the module loads. On Windows PowerShell 5.1 over .NET
+# Framework the default protocol depends on how the host is patched: a host on an
+# older framework, or with strong crypto disabled, can still negotiate TLS 1.0. A
+# Basic credential travels on every request here, so the floor is not left to the
+# machine. Existing flags are kept rather than replaced, and TLS 1.3 is added only
+# where the runtime knows the value - naming it directly throws on 5.1.
+$script:TlsFloor = [Net.SecurityProtocolType]::Tls12
+if ([enum]::GetNames([Net.SecurityProtocolType]) -contains 'Tls13') {
+    $script:TlsFloor = $script:TlsFloor -bor [Net.SecurityProtocolType]::Tls13
+}
+if (([Net.ServicePointManager]::SecurityProtocol -band $script:TlsFloor) -ne $script:TlsFloor) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $script:TlsFloor
+}
+
 function Assert-HttpBaseUrl {
     <#
     .SYNOPSIS
@@ -65,6 +79,14 @@ function Assert-HttpBaseUrl {
     }
     if ($parsed.Scheme -notin @('http', 'https')) {
         throw "$VariableName uses scheme '$($parsed.Scheme)'. Only http and https are supported."
+    }
+    # http is accepted and announced, not accepted silently. Every request carries a
+    # Basic header, and Base64 is an encoding, not encryption - so on plain http the
+    # token is readable by anything on the path. It stays allowed because a controller
+    # on a private network without a certificate is a real situation, and refusing it
+    # outright would push people towards disabling TLS checks instead, which is worse.
+    if ($parsed.Scheme -eq 'http') {
+        Write-Warning "$VariableName uses http, so the API token travels unencrypted on every request. Use https unless this is a network you control end to end."
     }
     # Credentials in the base URL, rejected rather than carried. Two reasons, and the
     # second is the one that bites: the header is already how this authenticates, so
@@ -126,7 +148,12 @@ function New-HttpUri {
     if ($cleanPath) { $uri += '/' + $cleanPath }
 
     if ($Query -and $Query.Keys.Count -gt 0) {
-        $pairs = foreach ($key in $Query.Keys) {
+        # Sorted, because the enumeration order of a .NET hashtable is not specified.
+        # Query order does not change what a GET means, so nothing is broken today -
+        # with one or two keys it is not even observable. It stops the same request
+        # from producing two different URLs between runs, which is what a log line or
+        # a cache key would disagree about later.
+        $pairs = foreach ($key in (@($Query.Keys) | Sort-Object)) {
             $value = $Query[$key]
             if ($null -eq $value) { continue }
             '{0}={1}' -f [Uri]::EscapeDataString([string] $key), [Uri]::EscapeDataString([string] $value)
@@ -285,11 +312,18 @@ function Get-HttpRetryAfterSecond {
     $raw = Get-HttpResponseHeader -Headers $response.Headers -Name 'Retry-After'
     if (-not $raw) { return 0 }
 
+    # Both parses are pinned to the invariant culture. Retry-After is either a count
+    # of seconds or an HTTP-date, and an HTTP-date is English by specification - so
+    # the current culture is never the right reader for it. Parsed under, say, a
+    # Spanish culture the date form simply fails, and the failure is silent: the
+    # backoff the server asked for is dropped and the retry goes out immediately,
+    # against a server that just said it was overloaded.
+    $invariant = [Globalization.CultureInfo]::InvariantCulture
     $seconds = 0
-    if ([int]::TryParse($raw, [ref] $seconds)) { return [Math]::Max(0, $seconds) }
+    if ([int]::TryParse($raw, [Globalization.NumberStyles]::Integer, $invariant, [ref] $seconds)) { return [Math]::Max(0, $seconds) }
 
     $when = [datetime]::MinValue
-    if ([datetime]::TryParse($raw, [ref] $when)) {
+    if ([datetime]::TryParse($raw, $invariant, [Globalization.DateTimeStyles]::AdjustToUniversal, [ref] $when)) {
         $delta = [int] ($when.ToUniversalTime() - [datetime]::UtcNow).TotalSeconds
         return [Math]::Max(0, $delta)
     }

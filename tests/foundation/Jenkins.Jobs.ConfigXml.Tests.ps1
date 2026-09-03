@@ -153,3 +153,30 @@ Describe 'Test-JenkinsContainerClass' {
         Test-JenkinsContainerClass -ClassName '' | Should -BeFalse
     }
 }
+
+Describe 'ConvertFrom-JenkinsJobConfigXml, on a hostile document' {
+
+    It 'refuses a document carrying a DTD instead of expanding it' {
+        # Billion laughs. XmlResolver = $null blocks an EXTERNAL entity, but an
+        # internal one still expands, and expansion is multiplicative: this shape with
+        # a few more levels exhausts the memory of the process. Anybody who can
+        # configure a job on the inspected controller can write this document, and
+        # reading a controller you do not own is what this tool is for.
+        $hostile = @'
+<!DOCTYPE project [
+  <!ENTITY a "aaaaaaaaaa">
+  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+]>
+<project><description>&c;</description></project>
+'@
+        { ConvertFrom-JenkinsJobConfigXml -Xml $hostile } | Should -Throw
+    }
+
+    It 'still reads an ordinary document with no DTD' {
+        # The guard above must not have made every document unreadable, which is the
+        # way a fix like this usually goes wrong.
+        $definition = ConvertFrom-JenkinsJobConfigXml -Xml (Get-FixtureXml -Name 'pipeline-from-scm.config.xml')
+        $definition.scm.branchSpecifier | Should -Be '*/main'
+    }
+}

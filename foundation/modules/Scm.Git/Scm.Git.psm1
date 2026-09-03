@@ -387,10 +387,49 @@ function Invoke-GitCommand {
     $startInfo.StandardOutputEncoding = [Text.Encoding]::UTF8
     $startInfo.StandardErrorEncoding = [Text.Encoding]::UTF8
 
-    $startInfo.Arguments = ConvertTo-ProcessArgumentString -Arguments $Arguments
+    # Configuration hardening, injected here rather than accepted from callers - which
+    # is why it goes in after the allowlist above and not through it. Git honours
+    # settings from the .git/config of whatever repository it is run in, and this is a
+    # tool pointed at repositories it does not control: core.fsmonitor and
+    # core.hooksPath both name programs git executes.
+    #
+    # core.sshCommand is deliberately NOT overridden. It is the same class of vector,
+    # but -c has the highest precedence in git, so overriding it would also override
+    # the legitimate one a person has configured - and ambient authentication is this
+    # tool's whole premise. Closing that hole properly needs a way to ignore
+    # repository-local config alone, which git does not offer.
+    $hardenedArguments = @(
+        '-c', 'core.fsmonitor=',
+        '-c', 'core.hooksPath='
+    ) + $Arguments
+    $startInfo.Arguments = ConvertTo-ProcessArgumentString -Arguments $hardenedArguments
 
     $startInfo.EnvironmentVariables['GIT_TERMINAL_PROMPT'] = '0'
     $startInfo.EnvironmentVariables['GCM_INTERACTIVE'] = 'never'
+    # System-wide config is not needed to read a remote, and it is one less file whose
+    # contents decide what this process executes.
+    $startInfo.EnvironmentVariables['GIT_CONFIG_NOSYSTEM'] = '1'
+
+    # git needs no credential of this tool's, so it is not given one. Without this the
+    # child inherits the whole process environment, tokens included, and every git
+    # invocation hands them to a program chosen by the repository being inspected.
+    #
+    # Matched by SHAPE rather than by name, because this module carries no domain
+    # rules: it does not know that this repository's secrets are called JENKINS_ or
+    # JIRA_ anything, and it should not have to.
+    # Names git legitimately needs to authenticate, kept whatever they look like.
+    # SSH_AUTH_SOCK matches the pattern below on its AUTH segment, and removing it
+    # disconnects the ssh agent - breaking the ambient authentication this tool
+    # depends on, and breaking it as a "repository not found" that reads like a
+    # permissions problem. This keep-list is why the pattern stays conservative.
+    $keepEnvironmentName = @('SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'SSH_ASKPASS', 'GIT_SSH', 'GIT_SSH_COMMAND', 'GIT_ASKPASS')
+    $secretEnvironmentName = '(?i)(password|passwd|pwd|passphrase|secret|token|credential|apikey|api_key|accesskey|access_token|privatekey|private_key|(^|[_-])(pat|bearer)([_-]|$))'
+    foreach ($name in @($startInfo.EnvironmentVariables.Keys)) {
+        if ($keepEnvironmentName -contains $name) { continue }
+        if ($name -match $secretEnvironmentName) {
+            $null = $startInfo.EnvironmentVariables.Remove($name)
+        }
+    }
 
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $startInfo

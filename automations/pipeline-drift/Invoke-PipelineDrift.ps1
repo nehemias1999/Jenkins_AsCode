@@ -394,7 +394,17 @@ foreach ($pipeline in $selected) {
                     $atCommit = Get-GitFileAtCommit -RepositoryPath $workingCopyPath -Commit $record.remoteCommit -FilePath $record.scriptPath -Branch $resolved.Branch -RemoteName $remoteName
                     $record.agentLabels = @(Get-JenkinsfileAgentLabel -Jenkinsfile $atCommit)
 
-                    $localFile = Join-Path $workingCopyPath $record.scriptPath
+                    # scriptPath comes from the config.xml of the inspected controller,
+                    # so it is somebody else's input. Unchecked, a job declaring
+                    # ../../../.env makes this read that file off the auditor's disk. The
+                    # content never reaches the report - only a SHA-256 and a line count -
+                    # so the leak degrades to a hash oracle rather than an exfiltration,
+                    # which is why this is a containment check and not a refusal to run.
+                    $localFile = [System.IO.Path]::GetFullPath((Join-Path $workingCopyPath $record.scriptPath))
+                    $copyPrefix = [System.IO.Path]::GetFullPath($workingCopyPath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+                    if (-not $localFile.StartsWith($copyPrefix + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+                        throw "The job declares a script path that resolves outside its working copy, so nothing was read from it."
+                    }
                     $localText = if (Test-Path -LiteralPath $localFile) { Get-Content -LiteralPath $localFile -Raw } else { '' }
                     $record.comparison = Compare-ScmText -Left $atCommit -Right $localText
                 }

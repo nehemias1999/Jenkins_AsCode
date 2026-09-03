@@ -440,5 +440,8 @@ foreach ($group in ($findings | Group-Object Rule | Sort-Object Count -Descendin
     Write-Information ("  {0,-20} {1,4}  {2}" -f $group.Name, $group.Count, $group.Group[0].Reason) -InformationAction Continue
 }
 
-if ($PassThru) { return $findings }
+# -PassThru returns the objects AND still exits non-zero. Returning findings with a
+# success code invites a pipeline that is green while holding them, which is the
+# failure this whole check exists to prevent.
+if ($PassThru) { $findings; exit 1 }
 exit 1

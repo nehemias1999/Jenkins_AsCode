@@ -442,7 +442,21 @@ function ConvertFrom-JenkinsJobConfigXml {
     # entity; resolving an external one is never wanted here and is an XXE vector.
     $document.XmlResolver = $null
     try {
-        $document.LoadXml($prepared.Text)
+        # Loaded through a reader that refuses a DTD outright. XmlResolver = $null
+        # above already blocks an EXTERNAL entity, but an internal one still expands,
+        # and expansion is multiplicative: a handful of nested entity definitions in
+        # a config.xml exhaust the memory of this process. Anybody able to configure
+        # a job on the inspected controller can write that document, and reading a
+        # controller this tool does not own is the whole point of it.
+        $readerSettings = New-Object System.Xml.XmlReaderSettings
+        $readerSettings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
+        $readerSettings.XmlResolver = $null
+        $stringReader = New-Object System.IO.StringReader($prepared.Text)
+        try {
+            $xmlReader = [System.Xml.XmlReader]::Create($stringReader, $readerSettings)
+            try { $document.Load($xmlReader) } finally { $xmlReader.Dispose() }
+        }
+        finally { $stringReader.Dispose() }
     }
     catch {
         throw "The config.xml document could not be parsed as XML: $($_.Exception.Message)"

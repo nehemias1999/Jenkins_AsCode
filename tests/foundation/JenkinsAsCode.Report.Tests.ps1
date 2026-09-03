@@ -162,3 +162,59 @@ Describe 'Remove-SensitiveValue' {
         Remove-SensitiveValue -InputObject $null | Should -BeNullOrEmpty
     }
 }
+
+Describe 'Format-JenkinsAsCodeReportMarkdown' {
+
+    BeforeAll {
+        # Builds the smallest plan that renders one table row, so the assertions below
+        # are about the cell text and nothing else.
+        function Get-OneRowReport {
+            param([string] $Resource = 'job', [string] $Name = 'job/x', [string] $Action = 'update', [string] $Reason = 'because')
+            return [pscustomobject]@{
+                module      = 'job-inventory'
+                command     = 'plan'
+                target      = 'https://jenkins.example.com'
+                generatedAt = '2026-09-03T00:00:00.0000000Z'
+                summary     = [pscustomobject]@{ total = 1; pending = 1 }
+                operations  = @([pscustomobject]@{
+                    resource = $Resource
+                    name     = $Name
+                    action   = $Action
+                    status   = 'pending'
+                    reason   = $Reason
+                })
+            }
+        }
+    }
+
+    It 'escapes a pipe in every column, not only in the reason' {
+        # A pipe ends a cell, so one in a job path grows the row an extra column and
+        # the table stops lining up. Three of the four columns carry text the inspected
+        # controller chooses, and only the reason used to be escaped.
+        $markdown = Format-JenkinsAsCodeReportMarkdown -Report (Get-OneRowReport -Name 'job/a|b' -Reason 'c|d')
+        $row = @($markdown -split "`n" | Where-Object { $_ -match 'job/a' })[0]
+        $row | Should -Match 'job/a\\|b'
+        $row | Should -Match 'c\\|d'
+    }
+
+    It 'keeps a value with a newline inside one row' {
+        # A newline ends the row, so one value silently became two rows - and the
+        # second one is not a row, so the table breaks from there down.
+        $markdown = Format-JenkinsAsCodeReportMarkdown -Report (Get-OneRowReport -Reason "first`nsecond")
+        $rows = @($markdown -split "`n" | Where-Object { $_ -match '^\| job ' })
+        $rows.Count | Should -Be 1
+        $rows[0] | Should -Match 'first second'
+    }
+
+    It 'neutralises markup that would inject a link or an element' {
+        # The summary is what gets attached to a ticket, and a ticket renders Markdown.
+        $markdown = Format-JenkinsAsCodeReportMarkdown -Report (Get-OneRowReport -Reason '[click](http://example.com) <b>x</b>')
+        $markdown | Should -Not -Match '\[click\]\('
+        $markdown | Should -Not -Match '<b>'
+    }
+
+    It 'renders an empty cell for a null value rather than the word null' {
+        $markdown = Format-JenkinsAsCodeReportMarkdown -Report (Get-OneRowReport -Reason '')
+        $markdown | Should -Not -Match '\bnull\b'
+    }
+}

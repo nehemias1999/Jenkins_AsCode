@@ -327,6 +327,65 @@ function Write-JenkinsAsCodeReport {
     return [pscustomobject]@{ JsonPath = $Path; MarkdownPath = $markdownPath }
 }
 
+function Format-MarkdownCell {
+    <#
+    .SYNOPSIS
+        Returns text safe to place in one cell of a Markdown table.
+
+    .DESCRIPTION
+        A plan carries text this tool did not write: a job path, a script path and a
+        reason all come from the controller being inspected or from git. Three things
+        go wrong when that text is pasted into a table unescaped.
+
+        A pipe ends the cell, so the row grows a column and the table stops lining
+        up. A newline ends the row, so one value silently becomes two rows. And a
+        bracket pair followed by a parenthesis is a link, so a value can inject one
+        into whatever renders the summary on a ticket.
+
+        None of that is a route to a secret - it is a route to a report that is wrong
+        or that carries something nobody wrote. Pure function, so it is tested through
+        the renderer without touching the file system.
+
+    .PARAMETER Text
+        Cell text. Null becomes an empty cell rather than the word null.
+
+    .EXAMPLE
+        Format-MarkdownCell -Text 'a | b'
+
+        a \| b
+
+    .OUTPUTS
+        The escaped single-line string.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)] [AllowNull()] [AllowEmptyString()] [object] $Text
+    )
+
+    if ($null -eq $Text) { return '' }
+    $cell = [string] $Text
+
+    # Ordinal string replacement, not -replace. That operator takes a regex on the
+    # left and a substitution string on the right, and both give a backslash its own
+    # meaning - so escaping a backslash there is a pattern that reads as an escape
+    # and a replacement that reads as an escape. The first version of this function
+    # shipped a bare backslash as a pattern and threw on every row it rendered.
+    # Replace() has no such semantics: it takes the characters it is given.
+    #
+    # Backslash goes first, because doing it later would escape the backslashes the
+    # other steps just added.
+    $cell = $cell.Replace('\', '\\')
+    $cell = $cell.Replace('|', '\|')
+    $cell = $cell.Replace('[', '\[').Replace(']', '\]')
+    $cell = $cell.Replace('<', '&lt;').Replace('>', '&gt;')
+
+    # A cell is one line. CRLF first, so a Windows newline does not leave a stray
+    # carriage return behind for the next step to turn into a second space.
+    $cell = $cell.Replace("`r`n", ' ').Replace("`n", ' ').Replace("`r", ' ')
+    return $cell
+}
+
 function Format-JenkinsAsCodeReportMarkdown {
     <#
     .SYNOPSIS
@@ -382,8 +441,15 @@ function Format-JenkinsAsCodeReportMarkdown {
             $lines.Add('| Resource | Name | Action | Reason |')
             $lines.Add('| --- | --- | --- | --- |')
             foreach ($item in $items) {
-                $reason = "$($item.reason)" -replace '\|', '\|'
-                $lines.Add("| $($item.resource) | $($item.name) | $($item.action) | $reason |")
+                # All four cells escaped, not just the reason. Three of them carry text
+                # the inspected controller chooses - a job path, a script path - so a
+                # pipe or a newline in any of them breaks the table, and a bracket pair
+                # injects a link into whatever renders this Markdown on a ticket.
+                $cellResource = Format-MarkdownCell -Text $item.resource
+                $cellName     = Format-MarkdownCell -Text $item.name
+                $cellAction   = Format-MarkdownCell -Text $item.action
+                $cellReason   = Format-MarkdownCell -Text $item.reason
+                $lines.Add("| $cellResource | $cellName | $cellAction | $cellReason |")
             }
             $lines.Add('')
         }
