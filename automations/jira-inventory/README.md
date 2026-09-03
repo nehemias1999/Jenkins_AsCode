@@ -7,7 +7,7 @@ nombre visible, y registrar el resultado de consultas JQL declaradas.
 
 ## Por qué existe
 
-Un campo personalizado se direcciona en la API como `customfield_10042`, y en ningun
+Un campo personalizado se direcciona en la API como `customfield_XXXXX`, y en ningun
 lugar de Jira aparece el nombre visible al lado de ese id. Un pipeline que necesita leer
 un campo tiene que recibir el id de alguien que lo buscó a mano. Esto es esa búsqueda,
 hecha repetible y revisable.
@@ -37,7 +37,7 @@ cola deja de encontrar trabajo y nadie se entera.
 ```powershell
 .\Invoke-JiraInventory.ps1 -Command validate
 .\Invoke-JiraInventory.ps1 -Command inventory
-.\Invoke-JiraInventory.ps1 -Command inventory -FieldName 'Etapa'
+.\Invoke-JiraInventory.ps1 -Command inventory -FieldName 'Example Stage'
 .\Invoke-JiraInventory.ps1 -Command plan
 .\Invoke-JiraInventory.ps1 -Command smoke
 ```
@@ -54,7 +54,7 @@ al campo equivocado**. Así que se reportan todos los candidatos y decide una pe
 
 ## Por qué no escribe
 
-Dos razones. Los `Jenkinsfile` de este parque ya comentan y transicionan issues por su
+Dos razones. Los `Jenkinsfile` habitualmente ya comentan y transicionan issues por su
 cuenta, con el plugin de Jira de Jenkins; un segundo escritor sobre el mismo workflow
 produce transiciones dobles que después nadie puede atribuir. Y la pregunta que este
 módulo existe para responder es una lectura.

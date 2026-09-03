@@ -15,14 +15,14 @@
       smoke      Plan plus the manual verification checklist.
 
     There is no apply, and no code path that could write. Two reasons. The pipelines
-    in this estate already comment on and transition issues themselves through the
+    commonly comment on and transition issues themselves through the
     Jenkins Jira plugin; a second writer against the same workflow produces double
     transitions that nobody can attribute afterwards. And the question this module
     exists to answer is a read: what is the opaque id behind a field everyone refers
     to by name.
 
     That question is not academic. A custom field is addressed in the API as
-    customfield_10042 and nowhere in Jira does the display name appear next to it, so
+    customfield_XXXXX and nowhere in Jira does the display name appear next to it, so
     a pipeline that needs to read a field has to be told the id by somebody who looked
     it up. This is that lookup, made repeatable and reviewable.
 
@@ -52,9 +52,9 @@
     Offline check. Needs no credential.
 
 .EXAMPLE
-    .\Invoke-JiraInventory.ps1 -Command inventory -FieldName 'Etapa'
+    .\Invoke-JiraInventory.ps1 -Command inventory -FieldName 'Example Stage'
 
-    Prints the API id behind the field displayed as Etapa.
+    Prints the API id behind the field displayed as Example Stage.
 
 .EXAMPLE
     .\Invoke-JiraInventory.ps1 -Command plan

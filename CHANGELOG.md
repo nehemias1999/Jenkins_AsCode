@@ -57,12 +57,12 @@ lectura de Jira. No existe camino de código que escriba.
   que ningún `ValidateSet` contenga `apply`, que no exista un `-Method Post`, que no haya un
   `git checkout`, y que `Invoke-WebRequest` figure en un solo archivo.
 
-### Portado desde `Pipeline_ADO_AsCode`
+### Portado desde un repositorio hermano para Azure DevOps
 
 - `JenkinsAsCode.Plan`, `.Report` y `.Configuration` se copiaron sin cambios funcionales:
   por diseño no contienen una sola referencia a Azure DevOps, y eso se verificó antes de
   portarlos. Se conserva el vocabulario cerrado de estados y acciones para que quien lea un
-  plan de los dos repositorios no tenga que aprender dos idiomas.
+  plan de cualquiera de los dos repositorios no tenga que aprender dos idiomas.
 - `Get-JenkinsAsCodeMemberList` se retiró: era específico de Teams de Azure DevOps y acá no
   tiene uso. En su lugar, `Get-JenkinsAsCodeRequiredValue`, que vive en la capa compartida
   porque hay **dos** transportes y una regla implementada dos veces se desincroniza.

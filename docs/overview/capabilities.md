@@ -46,7 +46,7 @@ Los tres se invocan igual: `-Command <verbo>`, y ninguno escribe.
 
 | Capacidad | Qué hace | Comando |
 | --- | --- | --- |
-| Resolver un campo por nombre visible | De `Etapa` a `customfield_XXXXX`. Con más de un match, `blocked` con los candidatos: Jira permite nombres duplicados y elegir el primero da un id que funciona y pertenece al campo equivocado. | `inventory`, `plan` |
+| Resolver un campo por nombre visible | De `Example Stage` a `customfield_XXXXX`. Con más de un match, `blocked` con los candidatos: Jira permite nombres duplicados y elegir el primero da un id que funciona y pertenece al campo equivocado. | `inventory`, `plan` |
 | Resolver un campo sin declararlo | `-FieldName`, para una pregunta puntual. Queda marcado como ad hoc en el reporte. | `inventory` |
 | Correr una consulta declarada | Con paginación correcta según la versión de API. | `inventory`, `plan` |
 | Detectar un JQL que quedó viejo | Una consulta declarada `non-empty` que devuelve cero es `warning`: un estado renombrado no hace fallar el JQL, lo deja devolviendo cero filas en silencio. | `plan` |

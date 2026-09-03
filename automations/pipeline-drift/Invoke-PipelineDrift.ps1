@@ -529,7 +529,7 @@ Write-ModuleLog "Report: $($written.JsonPath)"
 Write-ModuleLog "Summary: $($written.MarkdownPath)"
 
 # The Jenkinsfile content itself is never written to the report. These files hold
-# credentials in this estate, in clear text, and a report is the one artefact that
+# credentials in clear text more often than not, and a report is the one artefact that
 # gets attached to a ticket. Fingerprints and line counts answer the question
 # without carrying the secret.
 

@@ -130,7 +130,7 @@ function Get-JiraField {
 
     .DESCRIPTION
         The list every custom field question starts from. A custom field is addressed
-        in the API by an opaque id such as customfield_10042, while everyone refers to
+        in the API by an opaque id such as customfield_XXXXX, while everyone refers to
         it by its display name, and there is no way to derive one from the other.
 
     .PARAMETER Context
@@ -173,7 +173,7 @@ function Find-JiraFieldByName {
         Display name to look for, matched case-insensitively after trimming.
 
     .EXAMPLE
-        Find-JiraFieldByName -Field $fields -Name 'Etapa'
+        Find-JiraFieldByName -Field $fields -Name 'Example Stage'
 
     .OUTPUTS
         Every matching field, with id, name and custom.
@@ -224,7 +224,7 @@ function Get-JiraIssue {
         $null here does not prove absence.
 
     .EXAMPLE
-        Get-JiraIssue -Context $context -IssueKey 'PROJ-123' -Field @('status', 'customfield_10042')
+        Get-JiraIssue -Context $context -IssueKey 'PROJ-123' -Field @('status', 'customfield_XXXXX')
 
     .OUTPUTS
         The issue, or $null.

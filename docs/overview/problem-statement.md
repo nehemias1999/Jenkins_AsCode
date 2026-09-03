@@ -47,10 +47,9 @@ verificar después qué quedó configurado.
 
 ## 4. Y hay una segunda falla, del mismo tipo
 
-Los secretos del parque están en claro y commiteados: la contraseña de la herramienta de
-envíos dentro de un `Jenkinsfile`, la del servidor de GeneXus dentro de un `.bat`, el token
-de Jira en archivos `.env` que ningún repositorio ignora. No hay un solo uso del credential
-store de Jenkins.
+Es habitual que los secretos terminen en claro y commiteados: una contraseña dentro de un
+`Jenkinsfile`, otra dentro de un script de build, un token de API en un archivo `.env` que
+ningún repositorio ignora, y ningún uso del credential store de Jenkins.
 
 Eso no lo arregla este repositorio, y está fuera de su alcance. Pero es la misma clase de
 problema: información crítica que vive donde nadie la revisa, y que nadie puede inventariar

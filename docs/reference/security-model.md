@@ -8,7 +8,7 @@ cumplir cada regla.
 **Documentos relacionados**
 
 - [ADR 0001](../adr/0001-read-only-by-construction.md) — por qué no hay escritura
-- [scope-and-limits.md](../overview/scope-and-limits.md) — los secretos del parque, fuera de alcance
+- [scope-and-limits.md](../overview/scope-and-limits.md) — los secretos ya expuestos, fuera de alcance
 
 ## 1. Un principio
 
@@ -56,7 +56,7 @@ distinguirlo de uno secreto con suficiente confiabilidad no vale el riesgo en un
 que se comparte.
 
 **El contenido de un `Jenkinsfile`.** `pipeline-drift` compara archivos y reporta
-**fingerprints SHA-256**, no texto. En este parque esos archivos contienen credenciales en
+**fingerprints SHA-256**, no texto. Esos archivos suelen contener credenciales en
 claro; un reporte que las transcribiera propagaría el problema que existe para detectar.
 
 ## 4. Lo que no se sigue a otro host

@@ -70,8 +70,8 @@ realidad era distinto.
 
 ## 4. Cada nivel de carpeta lleva su propio segmento `/job/`
 
-**El comportamiento.** El job que la UI muestra como `INFRA-DEVOPS/AP_EnvioBTLAN` vive
-en `/job/INFRA-DEVOPS/job/AP_EnvioBTLAN/`, no en `/job/INFRA-DEVOPS/AP_EnvioBTLAN/`.
+**El comportamiento.** El job que la UI muestra como `EXAMPLE-FOLDER/example-pipeline` vive
+en `/job/EXAMPLE-FOLDER/job/example-pipeline/`, no en `/job/EXAMPLE-FOLDER/example-pipeline/`.
 
 **El síntoma.** 404. Y un 404 se interpreta como "el job no existe", cuando lo que no
 existe es esa URL.

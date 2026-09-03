@@ -75,12 +75,11 @@ agente limpio habría que clonar primero. Es la contrapartida de leer el SCM por
 lugar de por la API de cada proveedor: ver
 [ADR 0002](../adr/0002-git-cli-instead-of-provider-apis.md).
 
-## 7. Los secretos expuestos del parque no son alcance de esto
+## 7. Los secretos ya expuestos no son alcance de esto
 
-Las contraseñas en claro y commiteadas en los repositorios de pipelines —la de la
-herramienta de envíos en un `Jenkinsfile`, la del servidor de GeneXus en un `.bat`, el
-token de Jira en archivos `.env` sin ignorar— son un problema real y urgente, y este
-repositorio no lo resuelve.
+Las contraseñas en claro y commiteadas en los repositorios de pipelines —dentro de un
+`Jenkinsfile`, de un script de build, o de un archivo `.env` sin ignorar— son un problema
+real y urgente, y este repositorio no lo resuelve.
 
 Están en el historial de git, así que borrar el archivo no alcanza: hay que rotarlas. Lo
 que este repositorio sí hace es no agregar el problema: la configuración declara el

@@ -29,10 +29,10 @@ Jenkins escribe una declaración XML 1.1 desde la versión 2.190 y .NET parsea 1
 ## 404 en un job que existe
 
 La ruta. En Jenkins **cada nivel de carpeta lleva su propio segmento `/job/`**:
-`INFRA-DEVOPS/AP_EnvioBTLAN` vive en `/job/INFRA-DEVOPS/job/AP_EnvioBTLAN/`.
+`EXAMPLE-FOLDER/example-pipeline` vive en `/job/EXAMPLE-FOLDER/job/example-pipeline/`.
 
 En la declaración se pone la ruta visible con `/` entre niveles —
-`INFRA-DEVOPS/AP_EnvioBTLAN` — y `New-JenkinsJobPath` construye la URL. Si el 404 persiste,
+`EXAMPLE-FOLDER/example-pipeline` — y `New-JenkinsJobPath` construye la URL. Si el 404 persiste,
 comparar el nombre carácter por carácter: Jenkins distingue mayúsculas y PowerShell no, así
 que un error de mayúsculas no se nota al leer.
 

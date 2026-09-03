@@ -87,7 +87,7 @@ lectura de `git` a los remotos de los clones declarados.
 `artifacts/reports/pipeline-drift-<comando>-<fecha>.json` y su resumen `.md`.
 
 El reporte lleva **fingerprints SHA-256, nunca contenido del `Jenkinsfile`**. En este
-parque esos archivos contienen credenciales en claro, y el reporte es justamente el
+esos archivos suelen contener credenciales en claro, y el reporte es justamente el
 artefacto que se adjunta a un ticket.
 
 ## Rollback

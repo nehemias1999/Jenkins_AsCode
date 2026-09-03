@@ -492,7 +492,7 @@ function Get-JenkinsFolderChild {
         Display path of the folder, or an empty string for the controller root.
 
     .EXAMPLE
-        Get-JenkinsFolderChild -Context $context -Path 'INFRA-DEVOPS'
+        Get-JenkinsFolderChild -Context $context -Path 'EXAMPLE-FOLDER'
 
     .OUTPUTS
         One object per child, with name, path, className and isContainer.
@@ -547,7 +547,7 @@ function Get-JenkinsJobTree {
         How many levels below the starting point to descend.
 
     .EXAMPLE
-        Get-JenkinsJobTree -Context $context -Path 'INFRA-DEVOPS'
+        Get-JenkinsJobTree -Context $context -Path 'EXAMPLE-FOLDER'
 
     .OUTPUTS
         One object per item: name, path, className, isContainer, depth, truncated.
@@ -608,7 +608,7 @@ function Get-JenkinsJobDefinition {
         Return $null instead of throwing when the job does not exist.
 
     .EXAMPLE
-        Get-JenkinsJobDefinition -Context $context -JobPath 'INFRA-DEVOPS/AP_EnvioBTLAN'
+        Get-JenkinsJobDefinition -Context $context -JobPath 'EXAMPLE-FOLDER/example-pipeline'
 
     .OUTPUTS
         The job definition with a path property added, or $null.

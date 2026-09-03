@@ -35,11 +35,11 @@ function New-JenkinsJobPath {
         "the job does not exist".
 
         In Jenkins every folder level carries its own /job/ segment. The job
-        displayed as INFRA-DEVOPS/AP_EnvioBTLAN lives at
+        displayed as EXAMPLE-FOLDER/example-pipeline lives at
 
-            /job/INFRA-DEVOPS/job/AP_EnvioBTLAN/
+            /job/EXAMPLE-FOLDER/job/example-pipeline/
 
-        not at /job/INFRA-DEVOPS/AP_EnvioBTLAN/. A function that joins the parts
+        not at /job/EXAMPLE-FOLDER/example-pipeline/. A function that joins the parts
         with a slash produces a URL the controller answers 404 to, and the caller
         concludes the job is missing rather than that the URL is wrong.
 
@@ -54,9 +54,9 @@ function New-JenkinsJobPath {
         controller root, which yields an empty segment string.
 
     .EXAMPLE
-        New-JenkinsJobPath -Path 'INFRA-DEVOPS/AP_EnvioBTLAN'
+        New-JenkinsJobPath -Path 'EXAMPLE-FOLDER/example-pipeline'
 
-        job/INFRA-DEVOPS/job/AP_EnvioBTLAN
+        job/EXAMPLE-FOLDER/job/example-pipeline
 
     .OUTPUTS
         The path segment, with no leading or trailing slash.
@@ -249,13 +249,13 @@ function Get-JenkinsConfigXml {
         Context from Get-JenkinsContext.
 
     .PARAMETER JobPath
-        Display path of the job, for example 'INFRA-DEVOPS/AP_EnvioBTLAN'.
+        Display path of the job, for example 'EXAMPLE-FOLDER/example-pipeline'.
 
     .PARAMETER AllowNotFound
         Return $null instead of throwing on 404.
 
     .EXAMPLE
-        Get-JenkinsConfigXml -Context $context -JobPath 'INFRA-DEVOPS/AP_EnvioBTLAN'
+        Get-JenkinsConfigXml -Context $context -JobPath 'EXAMPLE-FOLDER/example-pipeline'
 
     .OUTPUTS
         The XML as a string, or $null on an allowed 404.
