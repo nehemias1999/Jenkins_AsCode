@@ -23,7 +23,7 @@
           "key": { "type": "string", "description": "Stable short name used in reports." },
           "jobPath": { "type": "string", "description": "Display path of the Jenkins job, folder segments separated by /." },
           "workingCopy": { "type": "string", "description": "Directory name under workingCopyRoot." },
-          "remoteName": { "type": "string", "description": "Git remote to query. Defaults to origin." }
+          "remoteName": { "type": "string", "pattern": "^[A-Za-z0-9._][A-Za-z0-9._/-]*$", "description": "Git remote to query. Defaults to origin. Must not begin with a dash: git would read it as an option. Enforced in code too, because the reduced 5.1 validator ignores pattern." }
         }
       }
     }

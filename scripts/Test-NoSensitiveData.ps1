@@ -30,6 +30,13 @@
     with '#' are ignored. A missing file means the layer is skipped, and that is
     reported so a silent pass is never mistaken for a clean scan.
 
+.PARAMETER RequireTermsFile
+    Treat an absent or empty deny list as a failure (exit 2) instead of running the
+    structural rules alone. Use it where the deny-list layer is supposed to be in
+    force. It is NOT the default on purpose: a check that cannot pass on a fresh
+    clone is a check people learn to ignore, and this repository has already been
+    bitten by exactly that.
+
 .PARAMETER PassThru
     Emit the finding objects instead of only the summary, for use in a pipeline.
 
@@ -50,6 +57,7 @@
 param(
     [string] $Path,
     [string] $TermsFile = '.local/sensitive-terms.txt',
+    [switch] $RequireTermsFile,
     [switch] $PassThru
 )
 
@@ -343,6 +351,12 @@ if (Test-Path -LiteralPath $termsPath) {
             Where-Object { $_ -and -not $_.StartsWith('#') }
     )
     Write-Verbose "Loaded $($denyTerms.Count) deny term(s) from $termsPath."
+    if ($denyTerms.Count -eq 0) {
+        # Present but with no usable line in it. Worth saying out loud: the file
+        # existing is what silences the warning below, so an empty one would
+        # otherwise buy false confidence rather than coverage.
+        Write-Warning "Deny-term file $termsPath has no terms in it. Structural rules only - this is not a full scan."
+    }
 }
 else {
     Write-Warning "Deny-term file not found: $termsPath. Structural rules only - this is not a full scan."
@@ -397,13 +411,29 @@ foreach ($file in Get-ScannableFile -Root $Path) {
     }
 }
 
+# Which layers actually ran is part of the result, not a footnote. "No findings"
+# on its own reads as a clean bill of health, and the deny-list layer is the only
+# one that can match an internal identifier with no recognisable shape - a folder
+# name, a job path, an opaque field id. Saying so in the success line is what stops
+# a structural-only pass from being mistaken for a full one.
+$coverage = if ($denyTerms.Count -gt 0) {
+    "structural rules + $($denyTerms.Count) deny term(s)"
+} else {
+    'structural rules only, no deny terms loaded'
+}
+
 if ($findings.Count -eq 0) {
-    Write-Information "Sensitive data gate: no findings across $scanned file(s)." -InformationAction Continue
+    Write-Information "Sensitive data gate: no findings across $scanned file(s) ($coverage)." -InformationAction Continue
+    if ($RequireTermsFile -and $denyTerms.Count -eq 0) {
+        Write-Warning "The deny-list layer was required and did not run. Add terms to $termsPath, or drop -RequireTermsFile to accept structural coverage only."
+        if ($PassThru) { return @() }
+        exit 2
+    }
     if ($PassThru) { return @() }
     exit 0
 }
 
-Write-Warning "Sensitive data gate: $($findings.Count) finding(s) across $scanned file(s)."
+Write-Warning "Sensitive data gate: $($findings.Count) finding(s) across $scanned file(s) ($coverage)."
 $table = $findings | Sort-Object File, Line | Format-Table -AutoSize Rule, File, Line, Match | Out-String
 Write-Information $table -InformationAction Continue
 foreach ($group in ($findings | Group-Object Rule | Sort-Object Count -Descending)) {

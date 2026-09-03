@@ -14,10 +14,15 @@
         'PSAvoidUsingWriteHost',
 
         # Credential parameters here are environment-variable NAMES and resolved
-        # values passed straight to a REST body. Converting them to SecureString
+        # values handed to an Authorization header. Converting them to SecureString
         # would mean unwrapping them again one line later, which adds ceremony
-        # without adding protection. Values are redacted at the report writer and
-        # masked in error text instead - see foundation/modules/JenkinsAsCode.Report.
+        # without adding protection.
+        #
+        # What protects them instead is two layers in the report writer, both tested:
+        # Remove-SensitiveValue redacts by property NAME, and Protect-SecretInText
+        # masks by VALUE - the second exists because the first cannot see a token
+        # embedded in a URL or in an error message. See
+        # foundation/modules/JenkinsAsCode.Report and its test file.
         'PSAvoidUsingPlainTextForPassword',
         'PSAvoidUsingUserNameAndPasswordParams',
         'PSUsePSCredentialType',

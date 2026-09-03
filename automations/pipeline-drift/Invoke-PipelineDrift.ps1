@@ -86,13 +86,20 @@ function Write-ModuleLog {
     .SYNOPSIS
         Writes a prefixed progress line.
 
+    .DESCRIPTION
+        Progress goes through here and nowhere else, so the value masker is applied
+        here too. Console output does not pass through the report writer, and git's
+        stderr names the remote it failed to authenticate against - URL, userinfo and
+        all. Masking at the funnel rather than at each call site means a log line
+        added later cannot reintroduce the leak.
+
     .PARAMETER Message
         Text to write.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)] [string] $Message)
 
-    Write-Information "[$moduleName] $Message" -InformationAction Continue
+    Write-Information "[$moduleName] $(Protect-SecretInText -Text $Message)" -InformationAction Continue
 }
 
 function Get-JenkinsfileAgentLabel {
@@ -280,6 +287,27 @@ foreach ($pipeline in $declaration.pipelines) {
     if ([string]::IsNullOrWhiteSpace($pipeline.workingCopy)) {
         $null = $validationProblem.Add("Pipeline '$($pipeline.key)' has an empty workingCopy.")
     }
+    else {
+        # workingCopy has to stay under the declared root. Join-Path neither normalises
+        # nor validates, so '../../elsewhere' resolves to a repository the declaration
+        # never named - and that path is what git then runs in. Checked here rather than
+        # with a schema pattern because on Windows PowerShell 5.1 the reduced validator
+        # does not evaluate pattern, so a schema rule would be enforced on one engine
+        # and ignored on the support floor.
+        $candidate = [System.IO.Path]::GetFullPath((Join-Path $workingCopyRoot $pipeline.workingCopy))
+        $rootPrefix = [System.IO.Path]::GetFullPath($workingCopyRoot).TrimEnd('\', '/')
+        if ($candidate -ne $rootPrefix -and -not $candidate.StartsWith($rootPrefix + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            $null = $validationProblem.Add("Pipeline '$($pipeline.key)' has a workingCopy that resolves outside workingCopyRoot. It must name a directory under the declared root, not a path that escapes it.")
+        }
+    }
+    # A remote name is an operand to git, and git reads a leading dash as an option:
+    # '--upload-pack=<binary>' in this field is a command git executes. Scm.Git and
+    # Invoke-GitCommand both refuse it, but failing here names the declaration entry
+    # that is wrong instead of failing mid-run.
+    if ($pipeline.PSObject.Properties['remoteName'] -and $pipeline.remoteName -and
+        $pipeline.remoteName -notmatch '^[A-Za-z0-9._][A-Za-z0-9._/-]*$') {
+        $null = $validationProblem.Add("Pipeline '$($pipeline.key)' has an unusable remoteName. It must start with a letter, digit, dot or underscore and contain only those plus dash and slash.")
+    }
 }
 
 if ($validationProblem.Count -gt 0) {
@@ -441,7 +469,22 @@ foreach ($record in $observation) {
     }
     catch { $localRemoteUrl = '' }
 
-    if ($localRemoteUrl -and $record.scmUrl -and ($localRemoteUrl.TrimEnd('/') -ine $record.scmUrl.TrimEnd('/'))) {
+    # Three outcomes, not two. The catch above turns a failed 'git remote get-url'
+    # into an empty string, and an empty string used to fall through to the ok
+    # branch - so a check that could not run reported that the working copy points
+    # at the right repository, and the file comparison below inherited that
+    # confidence. The rule this repository states for itself applies here: ok
+    # asserts the live state was checked and matched, and claiming that about
+    # something never compared is how a report becomes confidently wrong.
+    if (-not $record.scmUrl) {
+        Add-PlanOperation -Plan $plan -Operation (New-PlanOperation -Resource 'remoteUrl' -Name "$name/remoteUrl" -Action 'skip' -Status 'ok' `
+            -Reason "The job declares no SCM URL, so there is nothing to compare the working copy remote against.") | Out-Null
+    }
+    elseif (-not $localRemoteUrl) {
+        Add-PlanOperation -Plan $plan -Operation (New-PlanOperation -Resource 'remoteUrl' -Name "$name/remoteUrl" -Action 'validate' -Status 'warning' `
+            -Reason "The remote '$($record.remoteName)' could not be read from the working copy, so whether it points at the repository the job reads is unknown. Any file comparison below assumes it does.") | Out-Null
+    }
+    elseif ($localRemoteUrl.TrimEnd('/') -ine $record.scmUrl.TrimEnd('/')) {
         Add-PlanOperation -Plan $plan -Operation (New-PlanOperation -Resource 'remoteUrl' -Name "$name/remoteUrl" -Action 'update' -Status 'pending' `
             -Reason "The job reads '$($record.scmUrl)' but the working copy remote '$($record.remoteName)' is '$localRemoteUrl'. Any file comparison below is between two different repositories.") | Out-Null
     }
@@ -544,6 +587,20 @@ if ($Command -eq 'smoke') {
     Write-ModuleLog '  5. Check the report contains no line of Jenkinsfile content. It should carry fingerprints only.'
 }
 
+# Exit code, because the result has a consumer that is not a person reading the
+# screen. Test-PlanBlocked was already being called here and its answer thrown away
+# in a log line, so a scheduled run whose plan was entirely blocked reported
+# success. A job whose definition could not be read becomes a blocked operation
+# too, so this one code covers both "nothing could be determined" cases rather than
+# inventing a second one.
+#
+#   0  the run completed and nothing is blocked
+#   2  the run completed and at least one resource could not be determined
+#   1  the run itself failed (an uncaught throw: bad declaration, no credential,
+#      controller unreachable)
 if (Test-PlanBlocked -Plan $plan) {
     Write-ModuleLog 'The plan contains blocked operation(s). Each one needs a person, not a retry.'
+    exit 2
 }
+
+exit 0

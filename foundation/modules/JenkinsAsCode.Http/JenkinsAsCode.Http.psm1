@@ -66,6 +66,15 @@ function Assert-HttpBaseUrl {
     if ($parsed.Scheme -notin @('http', 'https')) {
         throw "$VariableName uses scheme '$($parsed.Scheme)'. Only http and https are supported."
     }
+    # Credentials in the base URL, rejected rather than carried. Two reasons, and the
+    # second is the one that bites: the header is already how this authenticates, so
+    # userinfo adds nothing - and every error message below, plus detail.controllerUrl
+    # in every report, interpolates this value. One misconfigured .env would copy a
+    # token into every artefact the tool writes. The message deliberately does not
+    # echo the URL back.
+    if ($parsed.UserInfo) {
+        throw "$VariableName carries credentials in the URL (a user[:password]@ before the host). Remove them: authentication uses the token from the environment, and a URL with userinfo would be copied into reports and error messages."
+    }
     if ($parsed.Query) {
         throw "$VariableName carries a query string. Remove it: the query of a derived URL would end up in the middle of the path."
     }

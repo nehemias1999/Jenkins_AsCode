@@ -8,6 +8,82 @@ adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 La versión es significativa porque los schemas de configuración son un contrato: un cambio
 incompatible en un schema es una versión mayor, haga lo que haga el código.
 
+## [Unreleased]
+
+Correcciones surgidas de una auditoría del repositorio. El criterio de diseño resistió la
+revisión; lo que falló es que casi nada mecánico lo defendía.
+
+### Seguridad
+
+- **Un secreto embebido en un valor ya no llega a un reporte.** La redacción era **por
+  nombre de propiedad**, así que todo el texto libre pasaba por debajo: un `scmUrl` con la
+  forma `https://user:TOKEN@host/...` se escribía en claro en el JSON y en el Markdown que
+  se pega en un ticket, y el stderr de `git fetch` —que nombra el remoto con sus
+  credenciales— llegaba igual a través de `reason` y de `failure`. El diagnóstico más claro
+  del agujero: `credentialsId`, que es una referencia y no un secreto, **sí** se redactaba
+  por contener `credential`, mientras el campo que podía llevar el token pasaba entero.
+
+  Se agrega `Protect-SecretInText`, que enmascara **por valor**, y se aplica en los dos
+  embudos en vez de en cada call site: el camino de cadenas de `Remove-SensitiveValue` —o
+  sea el writer, donde este módulo ya decía que va la redacción— y `Write-ModuleLog`, que
+  es por donde sale todo el progreso a consola. Un call site agregado mañana no puede
+  reintroducir la fuga. El host se conserva a propósito: un reporte que dice contra qué
+  repositorio se habló es justamente lo que sirve.
+
+- **`Assert-HttpBaseUrl` rechaza credenciales en la URL base.** El header ya es cómo esto
+  autentica, así que el `userinfo` no aportaba nada — y `detail.controllerUrl` va en cada
+  reporte, así que un `.env` mal puesto habría copiado un token a cada artefacto.
+
+- **Inyección de opciones de git, cerrada en dos capas.** El quoting garantizaba que un
+  argumento llegara como **un** argumento, pero git sigue leyendo un guion inicial como
+  opción: un `remoteName` de `--upload-pack=<binario>` es un binario que git ejecuta, y
+  tanto `ls-remote` como `fetch` documentan esa opción. Ahora `remoteName` se valida en el
+  borde (en código, no sólo en el schema: en 5.1 el validador reducido ignora `pattern`) y
+  `Invoke-GitCommand` acepta únicamente las opciones que este repositorio pasa. Es una
+  allowlist y no una denylist porque una lista de las opciones peligrosas de git es una
+  lista que envejece.
+
+- **`workingCopy` tiene que quedar bajo su root.** `Join-Path` no normaliza ni valida, así
+  que un `../..` apuntaba la herramienta —y el `git` que corre en ese directorio— a un
+  repositorio que la declaración nunca nombró.
+
+### Corregido
+
+- **Una corrida con algo bloqueado ya no reporta éxito.** `Test-PlanBlocked` se llamaba y
+  su respuesta se descartaba en una línea de log, y los tres puntos de entrada no tenían
+  una sola sentencia `exit`: un plan enteramente bloqueado, o 19 de 20 jobs leídos, salían
+  con código 0. Ahora: `0` nada bloqueado, `2` algo no se pudo determinar, `1` la corrida
+  falló. Un job ilegible ya producía una operación `blocked`, así que un solo código cubre
+  los dos casos en lugar de inventar un segundo.
+
+- **La puerta de datos sensibles dice qué capas corrieron.** Tiene dos, y la de términos
+  literales lee un archivo excluido del control de versiones — o sea que en una instalación
+  nueva no existe. La puerta avisaba con un warning y salía 0 con un "no findings" sin
+  calificar, que se lee como cobertura completa. Ahora la línea de éxito nombra la cobertura
+  real, y `-RequireTermsFile` (o `-RequireDenyTerms` en el runner) sale 2 cuando esa capa
+  era exigida y no corrió. **No** es el default: un chequeo que no puede pasar en un clon
+  limpio es un chequeo que la gente aprende a ignorar, que es la falla registrada más abajo
+  en este mismo archivo.
+
+- **Una excepción ya no se convierte en un `ok`.** Si `git remote get-url` fallaba, la
+  variable quedaba vacía, la condición era falsa y la rama `else` afirmaba que la copia de
+  trabajo apunta al repositorio que el job lee — sobre algo que nunca se pudo comparar.
+  Ahora son cuatro resultados: `skip` si el job no declara SCM, `warning` si el remoto no se
+  pudo leer, `pending` si difieren, y `ok` sólo cuando de verdad coincidieron. Es la regla
+  que este repositorio ya enunciaba para `Get-PropertyMatchStatus`, aplicada donde faltaba.
+
+### Agregado
+
+- **Tests de la capa de redacción**, que no tenía ninguno pese a ser lo último que corre
+  antes de escribir un reporte, y pese a que `PSScriptAnalyzerSettings.psd1` la cita como
+  la razón para suprimir tres reglas de credenciales. Incluye los dos modos en que ya había
+  fallado en producción: la sobre-redacción de `reportPath`/`areaPaths` por el fragmento
+  `pat`, y el desenvuelto de un array de un elemento. La suite pasa de 123 casos a 145.
+
+- `bootstrap.ps1` crea `.local/sensitive-terms.txt` **vacío**, con instrucciones. Vacío a
+  propósito: los términos son ellos mismos sensibles, así que sembrarlos desde un archivo
+  versionado los commitearía en el repositorio que los busca.
+
 ## [0.1.0] - 2026-09-01
 
 Primera entrega. Sólo lectura: inventario de jobs, detección de deriva de pipelines y

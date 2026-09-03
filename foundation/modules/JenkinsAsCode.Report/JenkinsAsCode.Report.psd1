@@ -11,6 +11,7 @@
     RequiredModules   = @('JenkinsAsCode.Plan')
 
     FunctionsToExport = @(
+        'Protect-SecretInText',
         'Remove-SensitiveValue',
         'Write-JenkinsAsCodeReport',
         'Format-JenkinsAsCodeReportMarkdown',

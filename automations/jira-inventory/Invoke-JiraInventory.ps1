@@ -87,13 +87,20 @@ function Write-ModuleLog {
     .SYNOPSIS
         Writes a prefixed progress line.
 
+    .DESCRIPTION
+        Progress goes through here and nowhere else, so the value masker is applied
+        here too. Console output does not pass through the report writer, and git's
+        stderr names the remote it failed to authenticate against - URL, userinfo and
+        all. Masking at the funnel rather than at each call site means a log line
+        added later cannot reintroduce the leak.
+
     .PARAMETER Message
         Text to write.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)] [string] $Message)
 
-    Write-Information "[$moduleName] $Message" -InformationAction Continue
+    Write-Information "[$moduleName] $(Protect-SecretInText -Text $Message)" -InformationAction Continue
 }
 
 function Get-CustomFieldStatus {
@@ -419,6 +426,20 @@ if ($Command -eq 'smoke') {
     Write-ModuleLog '  4. Confirm the report under artifacts/ contains no issue summary you would not paste into a ticket.'
 }
 
+# Exit code, because the result has a consumer that is not a person reading the
+# screen. Test-PlanBlocked was already being called here and its answer thrown away
+# in a log line, so a scheduled run whose plan was entirely blocked reported
+# success. A job whose definition could not be read becomes a blocked operation
+# too, so this one code covers both "nothing could be determined" cases rather than
+# inventing a second one.
+#
+#   0  the run completed and nothing is blocked
+#   2  the run completed and at least one resource could not be determined
+#   1  the run itself failed (an uncaught throw: bad declaration, no credential,
+#      controller unreachable)
 if (Test-PlanBlocked -Plan $plan) {
     Write-ModuleLog 'The plan contains blocked operation(s). Read the reasons above: each one needs a person, not a retry.'
+    exit 2
 }
+
+exit 0

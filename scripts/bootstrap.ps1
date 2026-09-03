@@ -103,6 +103,7 @@ catch {
 $localFolders = @('.local', 'artifacts/inventory', 'artifacts/reports')
 $envPath = Join-Path $repoRoot '.env'
 $envTemplatePath = Join-Path $repoRoot '.env.example'
+$termsPath = Join-Path $repoRoot '.local/sensitive-terms.txt'
 
 if ($CheckOnly) {
     foreach ($folder in $localFolders) {
@@ -110,6 +111,7 @@ if ($CheckOnly) {
         Write-BootstrapLog "$folder : $(if ($exists) { 'present' } else { 'would be created' })"
     }
     Write-BootstrapLog ".env : $(if (Test-Path -LiteralPath $envPath) { 'present' } else { 'would be created from .env.example' })"
+    Write-BootstrapLog ".local/sensitive-terms.txt : $(if (Test-Path -LiteralPath $termsPath) { 'present' } else { 'would be created empty' })"
 }
 else {
     foreach ($folder in $localFolders) {
@@ -129,6 +131,30 @@ else {
     }
     else {
         $problems.Add('.env.example is missing, so .env could not be created.')
+    }
+
+    # The deny-term layer of the sensitive data gate reads this file. Without it the gate
+    # runs structural rules only - it still passes, which is the dangerous part - so it is
+    # created here rather than left to be discovered missing.
+    if (Test-Path -LiteralPath $termsPath) {
+        Write-BootstrapLog '.local/sensitive-terms.txt already exists and was left untouched.'
+    }
+    else {
+        # Created EMPTY on purpose. The terms are themselves sensitive, so seeding real ones
+        # from this script would commit them to the repository that looks for them.
+        # WriteAllLines writes UTF-8 with no BOM; a BOM would corrupt the first term read.
+        [System.IO.File]::WriteAllLines($termsPath, [string[]] @(
+            '# One literal deny term per line. Blank lines and lines starting with # are ignored.',
+            '#',
+            '# This is the second layer of scripts/Test-NoSensitiveData.ps1. The first layer',
+            '# matches the SHAPE of a secret, so it cannot catch an internal identifier that has',
+            '# no recognisable shape: a folder name, a job path, an opaque custom field id, a',
+            '# project code name. Those are what leak by being unremarkable.',
+            '#',
+            '# Add yours below. .local/ is excluded from version control, which is why they go',
+            '# here and never in a tracked file.'
+        ))
+        Write-BootstrapLog 'created .local/sensitive-terms.txt (empty). Add one literal term per line: folder names, job paths, field ids, project code names.'
     }
 }
 

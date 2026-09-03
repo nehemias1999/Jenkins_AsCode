@@ -85,4 +85,41 @@ Describe 'The gate covers the whole repository' {
         $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath 2>&1
         ($output -join ' ') | Should -Match 'across \d+ file'
     }
+
+    It 'names the layers that ran, so a structural-only pass is not read as a full scan' {
+        # The gate has two layers and only one of them can run without a local file.
+        # "No findings" on its own is a clean bill of health for coverage that was
+        # never obtained - and the deny list is the only layer that can match an
+        # internal identifier with no recognisable shape, which is precisely the kind
+        # that leaks. The success line has to say which layers answered.
+        $missing = Join-Path ([System.IO.Path]::GetTempPath()) ("no-terms-" + [guid]::NewGuid().ToString() + '.txt')
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $missing 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
+        ($output -join ' ') | Should -Match 'structural rules only, no deny terms loaded'
+    }
+
+    It 'fails when the deny-list layer is required and did not run' {
+        # -RequireTermsFile is how a caller that depends on the deny list says so.
+        # Without a distinct exit code, a run with the layer silently absent is
+        # indistinguishable from a run with it in force.
+        $missing = Join-Path ([System.IO.Path]::GetTempPath()) ("no-terms-" + [guid]::NewGuid().ToString() + '.txt')
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $missing -RequireTermsFile 2>&1
+        $LASTEXITCODE | Should -Be 2 -Because ($output -join [Environment]::NewLine)
+    }
+
+    It 'runs the deny-list layer when the file has terms, and says how many' {
+        $terms = Join-Path ([System.IO.Path]::GetTempPath()) ("terms-" + [guid]::NewGuid().ToString() + '.txt')
+        try {
+            # The term is generated, not written literally, because a literal one
+            # would sit in this very file and the gate would dutifully find it there.
+            $term = 'absent-' + [guid]::NewGuid().ToString('N')
+            Set-Content -LiteralPath $terms -Value @('# a comment is not a term', $term) -Encoding ASCII
+            $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $script:GatePath -TermsFile $terms -RequireTermsFile 2>&1
+            $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
+            ($output -join ' ') | Should -Match 'structural rules \+ 1 deny term'
+        }
+        finally {
+            if (Test-Path -LiteralPath $terms) { Remove-Item -LiteralPath $terms -Force }
+        }
+    }
 }

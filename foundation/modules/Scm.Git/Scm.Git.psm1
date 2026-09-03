@@ -69,6 +69,9 @@ function Resolve-GitBranchName {
     [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $BranchSpecifier,
+        # A remote name that begins with a dash is an option to git, not a value.
+        # See the positional guard in Invoke-GitCommand for the whole reasoning.
+        [ValidatePattern('^[A-Za-z0-9._][A-Za-z0-9._/-]*$')]
         [string] $RemoteName = 'origin'
     )
 
@@ -349,6 +352,31 @@ function Invoke-GitCommand {
         throw "The git working directory '$WorkingDirectory' does not exist."
     }
 
+    # Only options this repository actually passes are allowed through. Correct
+    # quoting is not enough on its own: ConvertTo-ProcessArgumentString guarantees
+    # that an argument arrives as ONE argument, and git then still reads a leading
+    # dash as an option. A remote name of '--upload-pack=<binary>' is a binary git
+    # executes, and both ls-remote and fetch document that option, so a value taken
+    # from a declaration file would otherwise be a code execution path.
+    #
+    # An allowlist, not a denylist of dangerous options: a denylist of git's options
+    # is a list that goes stale as git grows. This list is this repository's own
+    # vocabulary, so anything outside it is by definition an option no call site here
+    # meant to pass.
+    #
+    # Note this cannot be a positional rule. git is invoked as
+    # <subcommand> [options] <operands>, so the subcommand is always the first
+    # non-option argument and every legitimate option follows it - 'rev-parse
+    # --verify <ref>' and 'cat-file -e <object>' are both that shape. A rule that
+    # forbade options after the first operand would reject those and was the first
+    # version of this guard.
+    $allowedOption = @('--exit-code', '--no-tags', '--depth', '-e', '--verify', '--version')
+    foreach ($argument in $Arguments) {
+        if ($argument -like '-*' -and $allowedOption -notcontains $argument) {
+            throw "Refusing to run git: '$argument' begins with a dash and is not one of the options this repository passes ($($allowedOption -join ', ')). git would read it as an option rather than as a value, which is what a hostile remote name or path looks like."
+        }
+    }
+
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = 'git'
     $startInfo.WorkingDirectory = (Resolve-Path -LiteralPath $WorkingDirectory).Path
@@ -453,6 +481,9 @@ function Get-GitRemoteBranchCommit {
     param(
         [Parameter(Mandatory)] [string] $RepositoryPath,
         [Parameter(Mandatory)] [string] $Branch,
+        # A remote name that begins with a dash is an option to git, not a value.
+        # See the positional guard in Invoke-GitCommand for the whole reasoning.
+        [ValidatePattern('^[A-Za-z0-9._][A-Za-z0-9._/-]*$')]
         [string] $RemoteName = 'origin'
     )
 
@@ -543,6 +574,9 @@ function Get-GitFileAtCommit {
         [Parameter(Mandatory)] [string] $Commit,
         [Parameter(Mandatory)] [string] $FilePath,
         [string] $Branch = '',
+        # A remote name that begins with a dash is an option to git, not a value.
+        # See the positional guard in Invoke-GitCommand for the whole reasoning.
+        [ValidatePattern('^[A-Za-z0-9._][A-Za-z0-9._/-]*$')]
         [string] $RemoteName = 'origin'
     )
 

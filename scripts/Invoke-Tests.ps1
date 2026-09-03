@@ -18,6 +18,12 @@
 .PARAMETER Path
     Restrict the Pester run to one path.
 
+.PARAMETER RequireDenyTerms
+    Fail when the sensitive data gate cannot run its deny-list layer. Off by
+    default: that layer reads a file excluded from version control, so a fresh
+    clone has none, and a check that cannot pass on a fresh clone is a check
+    people learn to ignore.
+
 .EXAMPLE
     .\scripts\Invoke-Tests.ps1
 
@@ -33,7 +39,9 @@ param(
     [ValidateSet('Analyzer', 'Pester', 'Secrets')]
     [string[]] $Skip = @(),
 
-    [string] $Path
+    [string] $Path,
+
+    [switch] $RequireDenyTerms
 )
 
 Set-StrictMode -Version Latest
@@ -164,8 +172,21 @@ if ($Skip -notcontains 'Pester') {
 
 if ($Skip -notcontains 'Secrets') {
     Write-TestLog 'Running the sensitive data gate...'
-    & (Join-Path $PSScriptRoot 'Test-NoSensitiveData.ps1')
-    if ($LASTEXITCODE -ne 0) {
+    if ($RequireDenyTerms) {
+        & (Join-Path $PSScriptRoot 'Test-NoSensitiveData.ps1') -RequireTermsFile
+    }
+    else {
+        & (Join-Path $PSScriptRoot 'Test-NoSensitiveData.ps1')
+    }
+    # Two failure modes, and telling them apart matters: findings mean something was
+    # found, exit 2 means the deny-list layer was required and never ran. Reporting
+    # the second as "reported findings" would send someone looking for a match that
+    # does not exist.
+    $gateExitCode = $LASTEXITCODE
+    if ($gateExitCode -eq 2) {
+        $failures.Add('The sensitive data gate could not run its deny-list layer, and it was required.')
+    }
+    elseif ($gateExitCode -ne 0) {
         $failures.Add('The sensitive data gate reported findings.')
     }
 }

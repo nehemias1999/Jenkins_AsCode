@@ -52,6 +52,69 @@ $script:SensitiveNameSegment = @(
 
 $script:SensitivePropertyPattern = "(?i)($($script:SensitiveNameFragment)|(?:^|[_-])(?:$($script:SensitiveNameSegment))(?:[_-]|$))"
 
+# Value shapes that carry a secret regardless of the property name holding them.
+#
+# Name-based redaction cannot see these, and that is not a hypothetical gap. A job
+# whose SCM URL is https://user:TOKEN@host/org/repo.git stores that string under the
+# name 'scmUrl', which looks innocent - while 'credentialsId', which is only a
+# reference and no secret at all, IS redacted because its name contains
+# 'credential'. The name layer was protecting the harmless field and passing the
+# dangerous one.
+#
+# Free text is the other half of the same hole: a reason, a failure message or git's
+# stderr ("Authentication failed for 'https://user:TOKEN@host'") is a string under a
+# name no pattern would ever flag.
+$script:SecretValuePattern = @(
+    # URL userinfo. The host is kept: it is the diagnostically useful part, and a
+    # reason that says which repository disagrees is the point of the message.
+    @{ Pattern = '(?i)\b([a-z][a-z0-9+.\-]*://)[^/\s@"'']+@'; Replacement = '$1[redacted]@' }
+
+    # A Basic credential, should one ever reach a message. Base64 of user:token.
+    @{ Pattern = '(?i)\bBasic\s+[A-Za-z0-9+/]{8,}={0,2}'; Replacement = 'Basic [redacted]' }
+)
+
+function Protect-SecretInText {
+    <#
+    .SYNOPSIS
+        Returns text with credential-shaped values masked.
+
+    .DESCRIPTION
+        Masks by VALUE, which is the complement of Remove-SensitiveValue masking by
+        property name. Use it for any string that reaches a report, a Markdown
+        summary or the console: a reason, an exception message, a URL read from a
+        controller or from .git/config.
+
+        The host of a URL is preserved deliberately. A message that says which
+        repository was contacted is worth having; the userinfo in front of it never
+        is.
+
+        Pure function, so it is tested offline against strings.
+
+    .PARAMETER Text
+        Text to mask. Null or empty is returned unchanged.
+
+    .EXAMPLE
+        Protect-SecretInText -Text "failed for 'https://me:ghp_x@example.com/a.git'"
+
+        failed for 'https://[redacted]@example.com/a.git'
+
+    .OUTPUTS
+        The masked string.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowNull()] [AllowEmptyString()] [string] $Text
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) { return $Text }
+
+    $masked = $Text
+    foreach ($rule in $script:SecretValuePattern) {
+        $masked = [regex]::Replace($masked, $rule.Pattern, $rule.Replacement)
+    }
+    return $masked
+}
+
 function Remove-SensitiveValue {
     <#
     .SYNOPSIS
@@ -95,7 +158,14 @@ function Remove-SensitiveValue {
     if ($null -eq $InputObject) { return $null }
     if ($Depth -le 0) { return '[depth limit reached]' }
 
-    if ($InputObject -is [string] -or $InputObject -is [bool] -or $InputObject -is [int] -or
+    # Every string in the evidence passes the value masker. Doing it here rather than
+    # at each call site is the same reasoning that put name-based redaction at the
+    # writer: a call site added later would otherwise reintroduce the leak silently.
+    if ($InputObject -is [string]) {
+        return (Protect-SecretInText -Text $InputObject)
+    }
+
+    if ($InputObject -is [bool] -or $InputObject -is [int] -or
         $InputObject -is [long] -or $InputObject -is [double] -or $InputObject -is [decimal] -or
         $InputObject -is [datetime]) {
         return $InputObject
@@ -407,6 +477,7 @@ function Get-JenkinsAsCodeReceiptPath {
 }
 
 Export-ModuleMember -Function @(
+    'Protect-SecretInText',
     'Remove-SensitiveValue',
     'Write-JenkinsAsCodeReport',
     'Format-JenkinsAsCodeReportMarkdown',
